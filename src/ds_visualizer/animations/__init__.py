@@ -14,6 +14,7 @@ from .avl import AvlAnimation
 from .union_find import UnionFindAnimation
 from .hash_set import HashSetAnimation
 from .priority_queue import PriorityQueueAnimation
+from .sparse_matrix import SparseMatrixAnimation
 from .hash_map import HashmapAnimation
 from .binary_tree import BinaryTreeAnimation
 from .heap import HeapAnimation
@@ -34,6 +35,7 @@ __all__ = [
     "UnionFindAnimation",
     "HashSetAnimation",
     "PriorityQueueAnimation",
+    "SparseMatrixAnimation",
     "HashmapAnimation",
     "BinaryTreeAnimation",
     "HeapAnimation",

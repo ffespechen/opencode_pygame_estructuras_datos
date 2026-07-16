@@ -1,0 +1,151 @@
+"""Animación visual para Sparse Matrix (matriz dispersa)."""
+
+import pygame
+from ds_visualizer import config
+from ds_visualizer.animations.base import BaseAnimation
+
+
+class SparseMatrixAnimation(BaseAnimation):
+    """Matriz con mayoría de ceros: insertar, buscar y recorrer no-ceros."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Representación COO: lista de (fila, col, valor)
+        self.entries: list[tuple[int, int, int]] = [
+            (0, 1, 5),
+            (1, 3, 8),
+            (2, 0, 3),
+            (3, 2, 7),
+        ]
+        self.rows = 4
+        self.cols = 4
+        self.actions = [
+            ("Vista: matriz densa vs entradas no-cero", 5.0),
+            ("Insertar valor en (1,1) = 9", 5.0),
+            ("Buscar valor en (2,0)", 5.0),
+            ("Recorrer solo no-ceros (COO)", 5.0),
+        ]
+
+    def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        if self._font is None:
+            self._init_font()
+
+        surface.fill(config.PANEL_BG)
+
+        if self.action_index == 0:
+            self._draw_overview(surface, rect)
+        elif self.action_index == 1:
+            self._draw_insert(surface, rect)
+        elif self.action_index == 2:
+            self._draw_search(surface, rect)
+        elif self.action_index == 3:
+            self._draw_traverse(surface, rect)
+
+    def _hint(self, surface: pygame.Surface, rect: pygame.Rect, text: str) -> None:
+        lbl = self._font.render(text, True, config.SUBTEXT_COLOR)
+        surface.blit(lbl, lbl.get_rect(midbottom=(rect.centerx, rect.bottom - 8)))
+
+    def _entry_map(
+        self, entries: list[tuple[int, int, int]]
+    ) -> dict[tuple[int, int], int]:
+        return {(r, c): v for r, c, v in entries}
+
+    def _draw_grid(
+        self,
+        surface: pygame.Surface,
+        rect: pygame.Rect,
+        entries: list[tuple[int, int, int]],
+        highlight: tuple[int, int] | None = None,
+        dim_zeros: bool = True,
+    ) -> None:
+        cell = min(48, (rect.width - 200) // self.cols, (rect.height - 80) // self.rows)
+        cell = max(cell, 28)
+        grid_w = self.cols * cell
+        grid_h = self.rows * cell
+        start_x = rect.x + (rect.width - grid_w) // 2 - 40
+        start_y = rect.y + (rect.height - grid_h) // 2 - 10
+        data = self._entry_map(entries)
+
+        for r in range(self.rows):
+            for c in range(self.cols):
+                x = start_x + c * cell
+                y = start_y + r * cell
+                box = pygame.Rect(x, y, cell - 2, cell - 2)
+                val = data.get((r, c), 0)
+                is_hl = highlight == (r, c)
+                is_nz = val != 0
+
+                if is_hl:
+                    fg = config.HIGHLIGHT_COLOR
+                    border = fg
+                elif is_nz:
+                    fg = config.ACCENT_COLOR
+                    border = config.ACCENT_COLOR
+                else:
+                    fg = config.SUBTEXT_COLOR if dim_zeros else config.TEXT_COLOR
+                    border = config.DIVIDER_COLOR
+
+                pygame.draw.rect(surface, config.CODE_BG, box, border_radius=3)
+                pygame.draw.rect(surface, border, box, width=2, border_radius=3)
+                vs = self._font.render(str(val), True, fg)
+                surface.blit(vs, vs.get_rect(center=box.center))
+
+        # Lista COO a la derecha
+        list_x = start_x + grid_w + 24
+        list_y = start_y
+        header = self._font.render("COO (i,j,v)", True, config.ACCENT_COLOR)
+        surface.blit(header, (list_x, list_y - 22))
+        for i, (r, c, v) in enumerate(entries):
+            line = self._font.render(f"({r},{c},{v})", True, config.TEXT_COLOR)
+            surface.blit(line, (list_x, list_y + i * 20))
+
+    def _draw_overview(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        p = self.progress()
+        self._draw_grid(surface, rect, self.entries, dim_zeros=True)
+        nz = len(self.entries)
+        total = self.rows * self.cols
+        if p < 0.5:
+            self._hint(
+                surface, rect,
+                f"Matriz {self.rows}×{self.cols}: {total} celdas, solo {nz} no-ceros"
+            )
+        else:
+            self._hint(
+                surface, rect,
+                "Formato COO guarda únicamente (fila, col, valor) ≠ 0"
+            )
+
+    def _draw_insert(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        p = self.progress()
+        if p < 0.4:
+            self._draw_grid(surface, rect, self.entries, highlight=(1, 1))
+            self._hint(surface, rect, "Insertar en (1,1)…")
+        else:
+            entries = list(self.entries) + [(1, 1, 9)]
+            self._draw_grid(surface, rect, entries, highlight=(1, 1))
+            self._hint(surface, rect, "Nueva entrada COO: (1,1,9)")
+
+    def _draw_search(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        p = self.progress()
+        target = (2, 0)
+        if p < 0.35:
+            self._draw_grid(surface, rect, self.entries)
+            self._hint(surface, rect, "Buscar (2,0) en lista COO…")
+        elif p < 0.7:
+            # highlight scanning entries visually via grid cell
+            self._draw_grid(surface, rect, self.entries, highlight=target)
+            self._hint(surface, rect, "Comparando coordenadas…")
+        else:
+            self._draw_grid(surface, rect, self.entries, highlight=target)
+            self._hint(surface, rect, "Encontrado: valor = 3")
+
+    def _draw_traverse(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        p = self.progress()
+        n = len(self.entries)
+        idx = min(int(p * n), n - 1)
+        r, c, v = self.entries[idx]
+        self._draw_grid(surface, rect, self.entries, highlight=(r, c))
+        self._hint(
+            surface, rect,
+            f"Recorrido COO [{idx + 1}/{n}]: ({r},{c}) → {v}"
+        )
