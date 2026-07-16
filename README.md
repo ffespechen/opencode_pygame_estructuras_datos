@@ -29,7 +29,8 @@ python -m ds_visualizer.main
 
 ### Menú principal
 
-- Lista de opciones navegable con flechas ↑↓ y selección con Enter
+- Lista de opciones navegable con flechas ↑↓ (y rueda del ratón) y selección con Enter
+- Menú con scroll automático cuando hay muchas estructuras
 - Estructuras de datos más la opción "Salir" al final, separada por una línea divisoria
 - La opción "Salir" aparece en color atenuado cuando no está seleccionada
 - Título y subtítulo centrados dinámicamente
@@ -51,21 +52,21 @@ python -m ds_visualizer.main
 | **Array / Lista** | Recorrido por índice, búsqueda lineal, inserción, eliminación |
 | **Linked List** | Recorrido de nodos, inserción al inicio, inserción al final, eliminación |
 | **Doubly Linked List** | Recorrido adelante, recorrido atrás, inserción en medio, eliminación |
-| **Deque** | Push front, Push rear, Pop front, Pop rear |
 | **Stack / Pila** | Push (apilar), Peek (consultar tope), Pop (desapilar), Push — tope arriba |
 | **Stack (lista enlazada)** | Push en HEAD, Peek TOP=HEAD, Pop HEAD, Push |
 | **Queue / Cola** | Enqueue (encolar), Peek (consultar frente), Dequeue (desencolar), Enqueue |
 | **Queue (lista enlazada)** | Enqueue en TAIL, Peek FRONT=HEAD, Dequeue HEAD, Enqueue |
-| **Trie** | Insertar CAT, insertar CAR (prefijo), buscar prefijo CA, eliminar CAT |
-| **AVL Tree** | Insertar con desbalance LL, rotación derecha, desbalance RR, rotación izquierda |
-| **Union-Find** | Find raíz, Union de conjuntos, Union adicional, path compression |
-| **Hash Set** | Add, Contains, Remove, Intersección |
+| **Deque** | Push front, Push rear, Pop front, Pop rear |
 | **Priority Queue** | Enqueue por prioridad, Peek, Dequeue (máx. prioridad), Enqueue |
-| **Sparse Matrix** | Vista densa vs COO, insertar no-cero, buscar celda, recorrer no-ceros |
 | **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |
+| **Hash Set** | Add, Contains, Remove, Intersección |
 | **Binary Tree** | Recorridos preorden, inorden, postorden e inserción en BST |
+| **AVL Tree** | Insertar con desbalance LL, rotación derecha, desbalance RR, rotación izquierda |
 | **Heap / Montículo** | Inserción con bubble-up, extracción con bubble-down, Peek (mínimo), Heapify |
+| **Trie** | Insertar CAT, insertar CAR (prefijo), buscar prefijo CA, eliminar CAT |
 | **Grafo** | BFS (anchura), DFS (profundidad), agregar vértice, agregar arista |
+| **Union-Find** | Find raíz, Union de conjuntos, Union adicional, path compression |
+| **Sparse Matrix** | Vista densa vs COO, insertar no-cero, buscar celda, recorrer no-ceros |
 
 ### Redimensionamiento de ventana
 
