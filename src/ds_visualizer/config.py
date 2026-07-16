@@ -49,6 +49,7 @@ DS_OPTIONS = [
     ("Trie", "trie"),
     ("AVL Tree", "avl"),
     ("Union-Find", "union_find"),
+    ("Hash Set", "hash_set"),
     ("Hash Maps o Diccionarios", "hash_map"),
     ("Binary Tree", "binary_tree"),
     ("Heap", "heap"),
