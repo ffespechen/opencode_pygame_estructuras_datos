@@ -1,5 +1,7 @@
 # Visualizador de Estructuras de Datos
 
+> **Monorepo:** este producto es el origen del repo. En la rama `feature/aventura-woz-hal` vive un proyecto **hermano** (`src/aventura_woz/` — WOZ.exe), derivado de la misma idea pedagógica pero con app, UI y docs propias (no es un modo de este visualizador).
+
 ## Descripción del proyecto
 
 Aplicación interactiva desarrollada con **Pygame** que permite explorar visualmente estructuras de datos fundamentales. El usuario selecciona una estructura desde un menú y accede a una pantalla dividida verticalmente: en la parte superior se muestra una representación gráfica animada de la estructura en acción, y debajo información teórica detallada (características, elementos, casos de uso y pseudocódigo) cargada desde archivos markdown editables.

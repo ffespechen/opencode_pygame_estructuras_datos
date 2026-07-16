@@ -2,6 +2,10 @@
 
 ## Decisiones de arquitectura y tomas de partido
 
+### 0. Producto hermano (WOZ.exe) en otra rama
+
+En `feature/aventura-woz-hal` el repo también incluye `src/aventura_woz/`: una aventura gráfica independiente que **deriva de la idea** de visualizar estructuras de datos, no del motor de este visualizador. No se registra en el menú de `ds_visualizer` ni reutiliza `BaseAnimation` / `MenuState`.
+
 ### 1. Estructura del proyecto — layout `src/`
 
 Se adoptó el layout `src/` (con `src/ds_visualizer/`) siguiendo las recomendaciones de la skill `python-project-structure`. Esto separa el código fuente del resto de artefactos (documentación, configuración) y evita importaciones accidentales del paquete sin instalarlo.
