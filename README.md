@@ -51,6 +51,7 @@ python -m ds_visualizer.main
 | **Array / Lista** | Recorrido por índice, búsqueda lineal, inserción, eliminación |
 | **Linked List** | Recorrido de nodos, inserción al inicio, inserción al final, eliminación |
 | **Doubly Linked List** | Recorrido adelante, recorrido atrás, inserción en medio, eliminación |
+| **Deque** | Push front, Push rear, Pop front, Pop rear |
 | **Stack / Pila** | Push (apilar), Peek (consultar tope), Pop (desapilar), Push — tope arriba |
 | **Queue / Cola** | Enqueue (encolar), Peek (consultar frente), Dequeue (desencolar), Enqueue |
 | **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |

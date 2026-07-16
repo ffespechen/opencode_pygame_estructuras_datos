@@ -41,6 +41,7 @@ DS_OPTIONS = [
     ("Array o Lista", "array"),
     ("Linked List", "linked_list"),
     ("Doubly Linked List", "doubly_linked_list"),
+    ("Deque", "deque"),
     ("Stack o Pila", "stack"),
     ("Queue o Cola", "queue"),
     ("Hash Maps o Diccionarios", "hash_map"),
