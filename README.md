@@ -39,34 +39,36 @@ python -m ds_visualizer.main
 ### Pantalla de visualización (dividida verticalmente)
 
 - **Panel superior (45%)**: animación visual de la estructura de datos a ancho completo
-  - Cada estructura tiene 4 acciones que se alternan cíclicamente (5 segundos cada una)
+  - **Modo demo** (por defecto): cada estructura cicla acciones animadas (~5 s cada una)
+  - **Modo interactivo** (`I`): el usuario dispara operaciones con teclas numéricas; el estado persiste hasta `R` (reset)
+  - Las operaciones que necesitan datos **piden entrada** (valor, clave, par de vértices, etc.): escribí y confirmá con `Enter` (cancelar con `Esc`)
 - **Panel inferior (55%)**: información teórica de la estructura cargada desde archivos `.md` individuales
   - Renderiza títulos, encabezados, listas con viñetas, bloques de código con fondo y texto normal con ajuste de línea
   - Desplazamiento vertical con flechas ↑↓ o rueda del ratón
-- **Barra inferior**: atajos de teclado a la izquierda y acción actual de la animación a la derecha (amarillo)
+- **Barra inferior**: atajos a la izquierda; a la derecha, la acción demo o las operaciones disponibles en modo interactivo
 
 ### Estructuras de datos implementadas
 
-| Estructura | Acciones animadas |
-|---|---|
-| **Array / Lista** | Recorrido por índice, búsqueda lineal, inserción, eliminación |
-| **Linked List** | Recorrido de nodos, inserción al inicio, inserción al final, eliminación |
-| **Doubly Linked List** | Recorrido adelante, recorrido atrás, inserción en medio, eliminación |
-| **Stack / Pila** | Push (apilar), Peek (consultar tope), Pop (desapilar), Push — tope arriba |
-| **Stack (lista enlazada)** | Push en HEAD, Peek TOP=HEAD, Pop HEAD, Push |
-| **Queue / Cola** | Enqueue (encolar), Peek (consultar frente), Dequeue (desencolar), Enqueue |
-| **Queue (lista enlazada)** | Enqueue en TAIL, Peek FRONT=HEAD, Dequeue HEAD, Enqueue |
-| **Deque** | Push front, Push rear, Pop front, Pop rear |
-| **Priority Queue** | Enqueue por prioridad, Peek, Dequeue (máx. prioridad), Enqueue |
-| **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |
-| **Hash Set** | Add, Contains, Remove, Intersección |
-| **Binary Tree** | Recorridos preorden, inorden, postorden e inserción en BST |
-| **AVL Tree** | Insertar con desbalance LL, rotación derecha, desbalance RR, rotación izquierda |
-| **Heap / Montículo** | Inserción con bubble-up, extracción con bubble-down, Peek (mínimo), Heapify |
-| **Trie** | Insertar CAT, insertar CAR (prefijo), buscar prefijo CA, eliminar CAT |
-| **Grafo** | BFS (anchura), DFS (profundidad), agregar vértice, agregar arista |
-| **Union-Find** | Find raíz, Union de conjuntos, Union adicional, path compression |
-| **Sparse Matrix** | Vista densa vs COO, insertar no-cero, buscar celda, recorrer no-ceros |
+| Estructura | Demo (automático) | Operaciones interactivas (`1`…`N`) |
+|---|---|---|
+| **Array / Lista** | Recorrido, búsqueda, inserción, eliminación | Traverse, Search, Insert, Delete |
+| **Linked List** | Recorrido, insert head/tail, delete | Traverse, Insert head, Insert tail, Delete head |
+| **Doubly Linked List** | Adelante, atrás, insert medio, delete | Forward, Backward, Insert mid, Delete |
+| **Stack / Pila** | Push, Peek, Pop | Push, Peek, Pop |
+| **Stack (lista enlazada)** | Push/Peek/Pop en HEAD | Push, Peek, Pop |
+| **Queue / Cola** | Enqueue, Peek, Dequeue | Enqueue, Peek, Dequeue |
+| **Queue (lista enlazada)** | Enqueue TAIL / Dequeue HEAD | Enqueue, Peek, Dequeue |
+| **Deque** | Push/Pop en ambos extremos | Push front, Push rear, Pop front, Pop rear |
+| **Priority Queue** | Enqueue por prio, Peek, Dequeue | Enqueue, Peek, Dequeue |
+| **Hash Map** | Put con colisión, Get, Delete | Put, Get, Remove |
+| **Hash Set** | Add, Contains, Remove, Intersección | Add, Contains, Remove |
+| **Binary Tree** | Preorden, inorden, postorden, insert BST | Preorden, Inorden, Postorden, Insert |
+| **AVL Tree** | Desbalance LL/RR y rotaciones | Insert, Delete |
+| **Heap** | Insert bubble-up, extract, Peek, Heapify | Insert, Extract-min, Peek |
+| **Trie** | Insert CAT/CAR, prefijo, delete | Insert, Search, Delete |
+| **Grafo** | BFS, DFS, vértice, arista | BFS, DFS, Add vertex, Add edge |
+| **Union-Find** | Find, Union, path compression | Find, Union |
+| **Sparse Matrix** | Vista COO, insert, search, traverse | Insert, Search, Traverse |
 
 ### Redimensionamiento de ventana
 
@@ -83,6 +85,11 @@ python -m ds_visualizer.main
 | `↑ ↓` | Navegar opciones del menú / desplazar panel de información |
 | `Enter` | Seleccionar estructura en el menú |
 | `ESC` | Volver al menú desde la visualización |
+| `I` | Alternar modo demo ↔ interactivo (en visualización) |
+| `R` | Reiniciar la estructura al estado inicial (modo interactivo) |
+| `1`…`9` | Ejecutar la operación correspondiente (también activa el modo interactivo) |
+| Texto + `Enter` | Completar el dato pedido por la operación (ej. par `B F` para una arista) |
+| `Esc` | Cancelar el prompt de entrada; si no hay prompt, volver al menú |
 | `Rueda ratón` | Desplazar panel de información |
 
 ### Archivos de datos

@@ -1,8 +1,10 @@
 """Animación visual para Union-Find (Disjoint Set Union)."""
 
+import copy
+
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class UnionFindAnimation(BaseAnimation):
@@ -11,18 +13,109 @@ class UnionFindAnimation(BaseAnimation):
     def __init__(self) -> None:
         super().__init__()
         self.elements = ["A", "B", "C", "D", "E", "F"]
+        self.parent: dict[str, str] = {e: e for e in self.elements}
+        self._initial_parent = copy.deepcopy(self.parent)
+        self._find_element = "C"
+        self._union_pair = ("A", "D")
+        self._highlighted: set[str] = set()
+        self._highlight_edges: list[tuple[str, str]] = []
         self.actions = [
             ("Find: buscar raíz de C", 5.0),
             ("Union: unir conjuntos A y D", 5.0),
             ("Union: unir C con E", 5.0),
             ("Path compression en Find(F)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Find", "find",
+                prompt="Elemento:", example="C",
+            ),
+            Operation(
+                pygame.K_2, "Union", "union",
+                prompt="Par de elementos:", example="A D",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.parent = copy.deepcopy(self._initial_parent)
+        self._find_element = "C"
+        self._union_pair = ("A", "D")
+        self._highlighted = set()
+        self._highlight_edges = []
+
+    def _find_root(self, x: str) -> str:
+        while self.parent[x] != x:
+            x = self.parent[x]
+        return x
+
+    def _find_path(self, x: str) -> list[str]:
+        path = [x]
+        while self.parent[x] != x:
+            x = self.parent[x]
+            path.append(x)
+        return path
+
+    def _roots(self) -> set[str]:
+        return {e for e in self.elements if self.parent[e] == e}
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "find":
+            elem = self.parse_token(user_input or "")
+            if elem is None:
+                return "Indicá un elemento"
+            elem = elem.upper()
+            if elem not in self.elements:
+                return f"'{elem}' no existe. Elementos: A-F"
+            self._find_element = elem
+            path = self._find_path(elem)
+            self._highlighted = set(path)
+            self._highlight_edges = [
+                (path[i], path[i + 1]) for i in range(len(path) - 1)
+            ]
+            root = path[-1]
+            return f"Find({elem}) = {root}"
+        if op_id == "union":
+            pair = self.parse_pair(user_input or "")
+            if pair is None:
+                return "Formato: dos elementos (ej: A D)"
+            a, b = pair
+            if a not in self.elements or b not in self.elements:
+                return f"Elementos válidos: A-F"
+            ra, rb = self._find_root(a), self._find_root(b)
+            if ra == rb:
+                self._highlighted = {a, b, ra}
+                self._highlight_edges = []
+                return f"Union({a},{b}): ya en el mismo conjunto"
+            self.parent[rb] = ra
+            self._highlighted = {a, b, ra, rb}
+            self._highlight_edges = [(b, ra)]
+            return f"Union({a},{b}): {b} → {ra}"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            highlighted = set(self._highlighted)
+            edges = list(self._highlight_edges)
+            if self.live_op == "find":
+                path = self._find_path(self._find_element)
+                count = int(self.live_progress() * (len(path) + 1))
+                highlighted = set(path[:count])
+                edges = [
+                    (path[i], path[i + 1])
+                    for i in range(min(count - 1, len(path) - 1))
+                ]
+            self._draw_forest(
+                surface, rect, self.parent, self._roots(),
+                highlighted, edges,
+            )
+            self._hint(surface, rect, self.operations_hint())
+            return
 
         if self.action_index == 0:
             self._draw_find(surface, rect)
@@ -34,7 +127,6 @@ class UnionFindAnimation(BaseAnimation):
             self._draw_path_compression(surface, rect)
 
     def _positions(self, rect: pygame.Rect) -> dict[str, tuple[int, int]]:
-        # Layout en dos filas de raíces / hijos
         cx = rect.centerx
         top = rect.y + 55
         mid = rect.y + rect.height // 2 + 5
@@ -74,7 +166,6 @@ class UnionFindAnimation(BaseAnimation):
     ) -> None:
         color = config.HIGHLIGHT_COLOR if highlight else config.DIVIDER_COLOR
         pygame.draw.line(surface, color, child, parent, width=2)
-        # pequeña punta hacia el padre
         dx = parent[0] - child[0]
         dy = parent[1] - child[1]
         length = max((dx * dx + dy * dy) ** 0.5, 1)
@@ -120,7 +211,6 @@ class UnionFindAnimation(BaseAnimation):
             )
 
     def _draw_find(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        # A raíz de {A,B,C}; D y E y F solos
         parent = {"A": "A", "B": "A", "C": "A", "D": "D", "E": "E", "F": "F"}
         roots = {"A", "D", "E", "F"}
         p = self.progress()
@@ -157,7 +247,6 @@ class UnionFindAnimation(BaseAnimation):
             self._hint(surface, rect, "D apunta a A → un solo conjunto")
 
     def _draw_union_ce(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
-        # Find(C)=A, Find(E)=E → E.parent = A
         p = self.progress()
         if p < 0.4:
             parent = {"A": "A", "B": "A", "C": "A", "D": "A", "E": "E", "F": "F"}
@@ -177,10 +266,8 @@ class UnionFindAnimation(BaseAnimation):
     def _draw_path_compression(
         self, surface: pygame.Surface, rect: pygame.Rect
     ) -> None:
-        # Cadena F -> E -> A, luego F apunta directo a A
         p = self.progress()
         pos = self._positions(rect)
-        # ajustar F bajo E visualmente
         pos["F"] = (pos["E"][0], pos["E"][1] + 70)
         pos["E"] = (pos["A"][0] + 120, pos["A"][1] + 70)
 

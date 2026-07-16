@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class LinkedListAnimation(BaseAnimation):
@@ -10,13 +10,59 @@ class LinkedListAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self.values = [15, 42, 8, 73, 56]
+        self._initial = [15, 42, 8, 73, 56]
+        self.values = list(self._initial)
         self.actions = [
             ("Recorriendo nodos", 5.0),
             ("Inserción al inicio (valor=99)", 5.0),
             ("Inserción al final (valor=11)", 5.0),
             ("Eliminación de nodo (valor=73)", 5.0),
         ]
+        self.set_operations([
+            Operation(pygame.K_1, "Traverse", "traverse"),
+            Operation(
+                pygame.K_2, "Insert head", "insert_head",
+                prompt="Valor:",
+                example="99",
+            ),
+            Operation(
+                pygame.K_3, "Insert tail", "insert_tail",
+                prompt="Valor:",
+                example="99",
+            ),
+            Operation(pygame.K_4, "Delete head", "delete_head"),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial)
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "traverse":
+            self.highlight_idx = 0
+            return "Recorriendo nodos"
+        if op_id == "insert_head":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            self.values.insert(0, v)
+            self.highlight_idx = 0
+            return f"Insert head {v}"
+        if op_id == "insert_tail":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            self.values.append(v)
+            self.highlight_idx = len(self.values) - 1
+            return f"Insert tail {v}"
+        if op_id == "delete_head":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Lista vacía"
+            removed = self.values.pop(0)
+            self.highlight_idx = 0 if self.values else -1
+            return f"Delete head {removed}"
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -27,6 +73,10 @@ class LinkedListAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
 
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
+
         if self.action_index == 0:
             self._draw_traverse(surface, rect)
         elif self.action_index == 1:
@@ -35,6 +85,17 @@ class LinkedListAnimation(BaseAnimation):
             self._draw_insert_tail(surface, rect)
         elif self.action_index == 3:
             self._draw_delete(surface, rect)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        highlight = self.highlight_idx
+        if self.live_op == "traverse":
+            n = len(self.values)
+            if n > 0:
+                highlight = min(int(self.live_progress() * n), n - 1)
+        if not self.values:
+            self.draw_empty(surface, rect, "(lista vacía)")
+            return
+        self._draw_nodes(surface, rect, self.values, highlight_idx=highlight)
 
     def _draw_nodes(
         self, surface: pygame.Surface, rect: pygame.Rect,

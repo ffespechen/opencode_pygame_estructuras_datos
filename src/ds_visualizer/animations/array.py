@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class ArrayAnimation(BaseAnimation):
@@ -10,7 +10,8 @@ class ArrayAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self.values = [42, 17, 88, 35, 63, 29, 51, 74]
+        self._initial = [42, 17, 88, 35, 63, 29, 51, 74]
+        self.values = list(self._initial)
         self.insert_value = 99
         self.insert_index = 2
         self.anim_values = list(self.values)
@@ -20,6 +21,74 @@ class ArrayAnimation(BaseAnimation):
             ("Inserción en posición 2 (valor=99)", 5.0),
             ("Eliminación en posición 3", 5.0),
         ]
+        self._search_target: int | None = None
+        self.set_operations([
+            Operation(pygame.K_1, "Traverse", "traverse"),
+            Operation(
+                pygame.K_2, "Search", "search",
+                prompt="Valor a buscar:",
+                example="63",
+            ),
+            Operation(
+                pygame.K_3, "Insert", "insert",
+                prompt="Valor a insertar:",
+                example="99",
+            ),
+            Operation(
+                pygame.K_4, "Delete", "delete",
+                prompt="Índice a eliminar:",
+                example="2",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial)
+        self._search_target = None
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "traverse":
+            self.highlight_idx = 0
+            self._search_target = None
+            return "Recorriendo por índice"
+        if op_id == "search":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            if not self.values:
+                self._search_target = v
+                self.highlight_idx = -1
+                return "Array vacío"
+            self._search_target = v
+            try:
+                idx = self.values.index(v)
+                self.highlight_idx = idx
+                return f"Búsqueda: valor={v} encontrado en índice {idx}"
+            except ValueError:
+                self.highlight_idx = -1
+                return f"Búsqueda: valor={v} no encontrado"
+        if op_id == "insert":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            self.values.append(v)
+            self.highlight_idx = len(self.values) - 1
+            self._search_target = None
+            return f"Insert {v} al final"
+        if op_id == "delete":
+            idx = self.parse_int(user_input or "")
+            if idx is None:
+                return "Ingresá un índice entero"
+            if not self.values:
+                self.highlight_idx = -1
+                return "Array vacío"
+            if idx < 0 or idx >= len(self.values):
+                return f"Índice fuera de rango (0..{len(self.values) - 1})"
+            removed = self.values.pop(idx)
+            self.highlight_idx = -1
+            self._search_target = None
+            return f"Delete {removed} en índice {idx}"
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -30,6 +99,10 @@ class ArrayAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
 
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
+
         if self.action_index == 0:
             self._draw_traverse(surface, rect)
         elif self.action_index == 1:
@@ -38,6 +111,32 @@ class ArrayAnimation(BaseAnimation):
             self._draw_insert(surface, rect)
         elif self.action_index == 3:
             self._draw_delete(surface, rect)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        highlight = self.highlight_idx
+        second = -1
+
+        if self.live_op == "traverse":
+            n = len(self.values)
+            if n > 0:
+                highlight = min(int(self.live_progress() * n), n - 1)
+        elif self.live_op == "search":
+            n = len(self.values)
+            if n > 0 and self._search_target is not None:
+                target_val = self._search_target
+                try:
+                    target_idx = self.values.index(target_val)
+                    total = target_idx + 1 + 0.5
+                    current = self.live_progress() * total
+                    highlight = min(int(current), target_idx)
+                    if self.live_progress() > 0.85:
+                        second = target_idx
+                except ValueError:
+                    current = int(self.live_progress() * n)
+                    highlight = min(current, n - 1)
+
+        self._draw_boxes(surface, rect, self.values, highlight_idx=highlight,
+                         second_highlight=second)
 
     def _draw_boxes(
         self, surface: pygame.Surface, rect: pygame.Rect,

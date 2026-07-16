@@ -2,7 +2,10 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
+
+
+_WORD_CYCLE = ["CAT", "CAR", "CAB", "DOG", "DOT"]
 
 
 class TrieAnimation(BaseAnimation):
@@ -10,20 +13,146 @@ class TrieAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        # Estructura fija: ROOT -> C -> A -> T* / R*
-        # Tras insertar "CAT" y "CAR"
+        self.words: set[str] = {"CAT", "CAR"}
+        self._initial_words = set(self.words)
+        self._word_idx = 0
+        self._highlighted: set[str] = set()
         self.actions = [
             ("Insertar palabra: CAT", 5.0),
             ("Insertar palabra: CAR (prefijo CA)", 5.0),
             ("Buscar prefijo: CA", 5.0),
             ("Eliminar palabra: CAT", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Insert", "insert",
+                prompt="Palabra:", example="DOG",
+            ),
+            Operation(
+                pygame.K_2, "Search", "search",
+                prompt="Prefijo o palabra:", example="CA",
+            ),
+            Operation(
+                pygame.K_3, "Delete", "delete",
+                prompt="Palabra:", example="CAT",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.words = set(self._initial_words)
+        self._word_idx = 0
+        self._highlighted = set()
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "insert":
+            word = (user_input or "").strip().upper()
+            if not word or not word.isalpha():
+                return "Indicá una palabra con letras (A-Z)"
+            self.words.add(word)
+            self._highlighted = self._word_path(word)
+            return f"Insert '{word}'"
+        if op_id == "search":
+            prefix = (user_input or "").strip().upper()
+            if not prefix or not prefix.isalpha():
+                return "Indicá un prefijo o palabra (A-Z)"
+            self._highlighted = self._prefix_path(prefix)
+            found = sorted(w for w in self.words if w.startswith(prefix))
+            return f"Search '{prefix}' → {found or '∅'}"
+        if op_id == "delete":
+            word = (user_input or "").strip().upper()
+            if not word or not word.isalpha():
+                return "Indicá una palabra (A-Z)"
+            if word not in self.words:
+                self._highlighted = set()
+                return f"Delete '{word}': no está en el trie"
+            self.words.remove(word)
+            self._highlighted = self._word_path(word)
+            return f"Delete '{word}'"
+        return ""
+
+    def _word_path(self, word: str) -> set[str]:
+        nodes = {"ROOT"}
+        for ch in word:
+            nodes.add(ch)
+        return nodes
+
+    def _prefix_path(self, prefix: str) -> set[str]:
+        nodes = {"ROOT"}
+        for ch in prefix:
+            nodes.add(ch)
+        return nodes
+
+    def _derive_structure(
+        self, words: set[str],
+    ) -> tuple[set[str], set[str], list[tuple[str, str]]]:
+        nodes: set[str] = {"ROOT"}
+        ends: set[str] = set()
+        edges: list[tuple[str, str]] = []
+        for word in sorted(words):
+            prev = "ROOT"
+            for ch in word:
+                nodes.add(ch)
+                edges.append((prev, ch))
+                prev = ch
+            ends.add(prev)
+        return nodes, ends, edges
+
+    def _dynamic_layout(
+        self, nodes: set[str], edges: list[tuple[str, str]], rect: pygame.Rect,
+    ) -> dict[str, tuple[int, int]]:
+        if not nodes:
+            return {}
+        children: dict[str, list[str]] = {}
+        for parent, child in edges:
+            children.setdefault(parent, []).append(child)
+
+        levels: dict[str, int] = {"ROOT": 0}
+        queue = ["ROOT"]
+        while queue:
+            cur = queue.pop(0)
+            for ch in children.get(cur, []):
+                if ch not in levels:
+                    levels[ch] = levels[cur] + 1
+                    queue.append(ch)
+
+        by_level: dict[int, list[str]] = {}
+        for name, lv in levels.items():
+            by_level.setdefault(lv, []).append(name)
+
+        max_level = max(by_level.keys()) if by_level else 0
+        pos: dict[str, tuple[int, int]] = {}
+        v_step = (rect.height - 100) // max(max_level, 1)
+        for lv in range(max_level + 1):
+            row = by_level.get(lv, [])
+            n = len(row)
+            h_step = rect.width // (n + 1)
+            y = rect.y + 36 + lv * v_step
+            for i, name in enumerate(row):
+                x = rect.x + (i + 1) * h_step
+                pos[name] = (x, y)
+        return pos
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            nodes, ends, edges = self._derive_structure(self.words)
+            pos = self._dynamic_layout(nodes, edges, rect)
+            highlighted = self._highlighted
+            if self.live_op in ("insert", "search", "delete") and self.live_op:
+                p = self.live_progress()
+                hl_list = sorted(highlighted)
+                count = int(p * (len(hl_list) + 1))
+                highlighted = set(hl_list[:count])
+            self._draw_trie_dynamic(
+                surface, rect, nodes, ends, edges, pos, highlighted,
+                words_label=f"palabras: {', '.join(sorted(self.words)) or '(vacío)'}",
+            )
+            return
 
         if self.action_index == 0:
             self._draw_insert_cat(surface, rect)
@@ -91,12 +220,43 @@ class TrieAnimation(BaseAnimation):
     ) -> None:
         color = config.HIGHLIGHT_COLOR if highlight else config.DIVIDER_COLOR
         if alpha < 255:
-            # pygame line no soporta alpha directo; dibujar atenuado aproximado
             color = tuple(
                 int(c * alpha / 255 + config.PANEL_BG[i] * (1 - alpha / 255))
                 for i, c in enumerate(color)
             )
         pygame.draw.line(surface, color, p1, p2, width=2)
+
+    def _draw_trie_dynamic(
+        self,
+        surface: pygame.Surface,
+        rect: pygame.Rect,
+        nodes: set[str],
+        ends: set[str],
+        edges: list[tuple[str, str]],
+        pos: dict[str, tuple[int, int]],
+        highlighted: set[str] | None = None,
+        words_label: str = "",
+    ) -> None:
+        highlighted = highlighted or set()
+        for a, b in edges:
+            if a in pos and b in pos:
+                self._draw_edge(
+                    surface, pos[a], pos[b],
+                    highlight=a in highlighted or b in highlighted,
+                )
+        for name in nodes:
+            if name not in pos:
+                continue
+            self._draw_node(
+                surface, pos[name],
+                name if name != "ROOT" else "·",
+                highlight=name in highlighted,
+                end_mark=name in ends,
+                radius=18 if name == "ROOT" else 20,
+            )
+        if words_label:
+            lbl = self._font.render(words_label, True, config.SUBTEXT_COLOR)
+            surface.blit(lbl, lbl.get_rect(midbottom=(rect.centerx, rect.bottom - 8)))
 
     def _draw_trie(
         self,

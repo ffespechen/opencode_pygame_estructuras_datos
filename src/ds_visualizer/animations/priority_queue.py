@@ -2,11 +2,13 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class PriorityQueueAnimation(BaseAnimation):
     """Cola ordenada por prioridad (vista lineal), distinta del heap como árbol."""
+
+    _LABELS = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 
     def __init__(self) -> None:
         super().__init__()
@@ -17,18 +19,71 @@ class PriorityQueueAnimation(BaseAnimation):
             (5, "LOG"),
             (8, "BAK"),
         ]
+        self._initial = list(self.base)
+        self.items = list(self._initial)
+        self._label_idx = 0
         self.actions = [
             ("Enqueue: tarea (prio=2, NET)", 5.0),
             ("Peek: consultar máxima prioridad", 5.0),
             ("Dequeue: extraer máxima prioridad", 5.0),
             ("Enqueue: tarea (prio=4, SYNC)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Enqueue", "enqueue",
+                prompt="Prioridad y etiqueta:",
+                example="2 NET",
+            ),
+            Operation(pygame.K_2, "Peek", "peek"),
+            Operation(pygame.K_3, "Dequeue", "dequeue"),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.items = list(self._initial)
+        self._label_idx = 0
+
+    def _next_label(self) -> str:
+        label = self._LABELS[self._label_idx % len(self._LABELS)]
+        self._label_idx += 1
+        return label
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "enqueue":
+            parsed = self.parse_prio_label(user_input or "")
+            if parsed is None:
+                return "Formato: prioridad y etiqueta (ej: 2 NET)"
+            prio, label = parsed
+            item = (prio, label)
+            self.items.append(item)
+            self.items.sort(key=lambda x: x[0])
+            self.highlight_idx = self.items.index(item)
+            return f"Enqueue (p={prio}, {label})"
+        if op_id == "peek":
+            if not self.items:
+                self.highlight_idx = -1
+                return "Cola vacía"
+            self.highlight_idx = 0
+            prio, label = self.items[0]
+            return f"Peek → (p={prio}, {label})"
+        if op_id == "dequeue":
+            if not self.items:
+                self.highlight_idx = -1
+                return "Cola vacía"
+            prio, label = self.items.pop(0)
+            self.highlight_idx = 0 if self.items else -1
+            return f"Dequeue (p={prio}, {label})"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
 
         if self.action_index == 0:
             self._draw_enqueue(surface, rect, (2, "NET"))
@@ -39,6 +94,18 @@ class PriorityQueueAnimation(BaseAnimation):
             self._draw_dequeue(surface, rect)
         elif self.action_index == 3:
             self._draw_enqueue(surface, rect, (4, "SYNC"))
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        if not self.items:
+            self.draw_empty(surface, rect, "(cola vacía)")
+            return
+        highlight = self.highlight_idx
+        if self.live_op == "peek" or self.live_op == "dequeue":
+            highlight = 0
+        elif self.live_op == "enqueue" and self.highlight_idx >= 0:
+            highlight = self.highlight_idx
+        self._draw_items(surface, rect, self.items, highlight_idx=highlight)
+        self._hint(surface, rect, "Menor prio = más urgente (FRONT)")
 
     def _hint(self, surface: pygame.Surface, rect: pygame.Rect, text: str) -> None:
         lbl = self._font.render(text, True, config.SUBTEXT_COLOR)

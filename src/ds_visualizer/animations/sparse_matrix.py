@@ -1,8 +1,11 @@
 """Animación visual para Sparse Matrix (matriz dispersa)."""
 
+import copy
+import random
+
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class SparseMatrixAnimation(BaseAnimation):
@@ -10,27 +13,101 @@ class SparseMatrixAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        # Representación COO: lista de (fila, col, valor)
-        self.entries: list[tuple[int, int, int]] = [
+        self._initial_entries: list[tuple[int, int, int]] = [
             (0, 1, 5),
             (1, 3, 8),
             (2, 0, 3),
             (3, 2, 7),
         ]
+        self.entries = copy.deepcopy(self._initial_entries)
         self.rows = 4
         self.cols = 4
+        self._highlight_cell: tuple[int, int] | None = None
         self.actions = [
             ("Vista: matriz densa vs entradas no-cero", 5.0),
             ("Insertar valor en (1,1) = 9", 5.0),
             ("Buscar valor en (2,0)", 5.0),
             ("Recorrer solo no-ceros (COO)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Insert", "insert",
+                prompt="Fila col valor:", example="1 1 9",
+            ),
+            Operation(
+                pygame.K_2, "Search", "search",
+                prompt="Fila col:", example="2 0",
+            ),
+            Operation(pygame.K_3, "Traverse", "traverse"),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.entries = copy.deepcopy(self._initial_entries)
+        self._highlight_cell = None
+
+    def _occupied(self) -> set[tuple[int, int]]:
+        return {(r, c) for r, c, _ in self.entries}
+
+    def _random_empty_cell(self) -> tuple[int, int] | None:
+        occupied = self._occupied()
+        empty = [
+            (r, c)
+            for r in range(self.rows)
+            for c in range(self.cols)
+            if (r, c) not in occupied
+        ]
+        return random.choice(empty) if empty else None
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "insert":
+            parsed = self.parse_int_triple(user_input or "")
+            if parsed is None:
+                return "Formato: fila col valor (ej: 1 1 9)"
+            r, c, val = parsed
+            if not (0 <= r < self.rows and 0 <= c < self.cols):
+                return f"Coordenadas fuera de rango (0..{self.rows - 1}, 0..{self.cols - 1})"
+            for i, (er, ec, _) in enumerate(self.entries):
+                if er == r and ec == c:
+                    self.entries[i] = (r, c, val)
+                    self._highlight_cell = (r, c)
+                    return f"Insert ({r},{c}) = {val} (actualizado)"
+            self.entries.append((r, c, val))
+            self._highlight_cell = (r, c)
+            return f"Insert ({r},{c}) = {val}"
+        if op_id == "search":
+            parsed = self.parse_int_pair(user_input or "")
+            if parsed is None:
+                return "Formato: fila col (ej: 2 0)"
+            r, c = parsed
+            if not (0 <= r < self.rows and 0 <= c < self.cols):
+                return f"Coordenadas fuera de rango (0..{self.rows - 1}, 0..{self.cols - 1})"
+            self._highlight_cell = (r, c)
+            for er, ec, v in self.entries:
+                if er == r and ec == c:
+                    return f"Search ({r},{c}) → {v}"
+            return f"Search ({r},{c}) → 0"
+        if op_id == "traverse":
+            self._highlight_cell = None
+            return "Recorrer entradas COO"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            highlight = self._highlight_cell
+            if self.live_op == "traverse":
+                n = len(self.entries)
+                if n > 0:
+                    idx = min(int(self.live_progress() * n), n - 1)
+                    r, c, _ = self.entries[idx]
+                    highlight = (r, c)
+            self._draw_grid(surface, rect, self.entries, highlight=highlight)
+            return
 
         if self.action_index == 0:
             self._draw_overview(surface, rect)
@@ -90,7 +167,6 @@ class SparseMatrixAnimation(BaseAnimation):
                 vs = self._font.render(str(val), True, fg)
                 surface.blit(vs, vs.get_rect(center=box.center))
 
-        # Lista COO a la derecha
         list_x = start_x + grid_w + 24
         list_y = start_y
         header = self._font.render("COO (i,j,v)", True, config.ACCENT_COLOR)
@@ -132,7 +208,6 @@ class SparseMatrixAnimation(BaseAnimation):
             self._draw_grid(surface, rect, self.entries)
             self._hint(surface, rect, "Buscar (2,0) en lista COO…")
         elif p < 0.7:
-            # highlight scanning entries visually via grid cell
             self._draw_grid(surface, rect, self.entries, highlight=target)
             self._hint(surface, rect, "Comparando coordenadas…")
         else:

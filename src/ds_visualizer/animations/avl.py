@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class AvlAnimation(BaseAnimation):
@@ -10,18 +10,65 @@ class AvlAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
+        self.values = [50, 40, 60]
+        self._initial_values = list(self.values)
+        self._last_inserted: int | None = None
+        self._highlight_idx = -1
         self.actions = [
             ("Insertar 30 → desbalanceo (BF=+2)", 5.0),
             ("Rotación simple derecha (LL)", 5.0),
             ("Insertar 70 → desbalanceo (BF=-2)", 5.0),
             ("Rotación simple izquierda (RR)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Insert", "insert",
+                prompt="Valor:", example="30",
+            ),
+            Operation(
+                pygame.K_2, "Delete", "delete",
+                prompt="Valor a eliminar:", example="40",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial_values)
+        self._last_inserted = None
+        self._highlight_idx = -1
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "insert":
+            val = self.parse_int(user_input or "")
+            if val is None:
+                return "Indicá un número entero"
+            self.values = sorted(self.values + [val])
+            self._last_inserted = val
+            self._highlight_idx = self.values.index(val)
+            return f"Insert {val} (ordenado / BST simplificado)"
+        if op_id == "delete":
+            val = self.parse_int(user_input or "")
+            if val is None:
+                return "Indicá un número entero"
+            if val not in self.values:
+                self._highlight_idx = -1
+                return f"Delete {val}: no está en el árbol"
+            self.values.remove(val)
+            if self._last_inserted == val:
+                self._last_inserted = None
+            self._highlight_idx = -1
+            return f"Delete {val}"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
 
         if self.action_index == 0:
             self._draw_insert_ll_imbalance(surface, rect)
@@ -31,6 +78,22 @@ class AvlAnimation(BaseAnimation):
             self._draw_insert_rr_imbalance(surface, rect)
         elif self.action_index == 3:
             self._draw_rotate_left(surface, rect)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        n = len(self.values)
+        if n == 0:
+            return
+        spacing = min(70, (rect.width - 40) // max(n, 1))
+        total_w = n * spacing
+        start_x = rect.centerx - total_w // 2 + spacing // 2
+        y = rect.centery
+
+        for i, val in enumerate(self.values):
+            x = start_x + i * spacing
+            highlight = i == self._highlight_idx
+            self._node(surface, x, y, str(val), highlight=highlight)
+
+        self._hint(surface, rect, "AVL interactivo (inserción)")
 
     def _node(
         self,
@@ -73,7 +136,6 @@ class AvlAnimation(BaseAnimation):
     def _draw_insert_ll_imbalance(
         self, surface: pygame.Surface, rect: pygame.Rect
     ) -> None:
-        # Cadena 50 <- 40 <- 30 (desbalance LL en 50)
         p = self.progress()
         cx = rect.centerx
         y1, y2, y3 = rect.y + 50, rect.y + rect.height // 2, rect.y + rect.height - 80
@@ -102,7 +164,6 @@ class AvlAnimation(BaseAnimation):
         y3 = rect.y + rect.height - 75
 
         if p < 0.45:
-            # Antes: 50-40-30
             self._edge(surface, (cx + 40, y1), (cx - 20, y2))
             self._edge(surface, (cx - 20, y2), (cx - 80, y3))
             self._node(surface, cx + 40, y1, "50", bf="+2", highlight=True)
@@ -110,7 +171,6 @@ class AvlAnimation(BaseAnimation):
             self._node(surface, cx - 80, y3, "30", bf="0")
             self._hint(surface, rect, "Rotación derecha sobre 50…")
         else:
-            # Después: 40 con hijos 30 y 50
             self._edge(surface, (cx, y1), (cx - 90, y2))
             self._edge(surface, (cx, y1), (cx + 90, y2))
             self._node(surface, cx, y1, "40", bf="0", highlight=True)
@@ -121,8 +181,6 @@ class AvlAnimation(BaseAnimation):
     def _draw_insert_rr_imbalance(
         self, surface: pygame.Surface, rect: pygame.Rect
     ) -> None:
-        # Partimos del AVL balanceado 40(30,50) e insertamos 70 → RR en 40? 
-        # Mejor: mostrar 40-50-70 cadena derecha
         p = self.progress()
         cx = rect.centerx
         y1, y2, y3 = rect.y + 50, rect.y + rect.height // 2, rect.y + rect.height - 80
@@ -160,7 +218,6 @@ class AvlAnimation(BaseAnimation):
             self._node(surface, cx + 110, y2 + 50, "70", bf="0")
             self._hint(surface, rect, "Rotación izquierda sobre 40…")
         else:
-            # Resultado: 50 raíz, 40 izq (30), 70 der
             self._edge(surface, (cx, y1), (cx - 100, y2))
             self._edge(surface, (cx, y1), (cx + 100, y2))
             self._edge(surface, (cx - 100, y2), (cx - 160, y2 + 55))

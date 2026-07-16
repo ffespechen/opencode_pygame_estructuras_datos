@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class QueueAnimation(BaseAnimation):
@@ -11,12 +11,50 @@ class QueueAnimation(BaseAnimation):
     def __init__(self) -> None:
         super().__init__()
         self.base_values = [12, 45, 67, 30]
+        self._initial = list(self.base_values)
+        self.values = list(self._initial)
         self.actions = [
             ("Enqueue: encolando elemento (88)", 5.0),
             ("Peek: consultando frente", 5.0),
             ("Dequeue: desencolando elemento", 5.0),
             ("Enqueue: encolando elemento (19)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Enqueue", "enqueue",
+                prompt="Valor a encolar:",
+                example="88",
+            ),
+            Operation(pygame.K_2, "Peek", "peek"),
+            Operation(pygame.K_3, "Dequeue", "dequeue"),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial)
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "enqueue":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            self.values.append(v)
+            self.highlight_idx = len(self.values) - 1
+            return f"Enqueue {v}"
+        if op_id == "peek":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Cola vacía"
+            self.highlight_idx = 0
+            return f"Peek → {self.values[0]}"
+        if op_id == "dequeue":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Cola vacía"
+            removed = self.values.pop(0)
+            self.highlight_idx = 0 if self.values else -1
+            return f"Dequeue {removed}"
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -27,6 +65,10 @@ class QueueAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
 
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
+
         if self.action_index == 0:
             self._draw_enqueue(surface, rect, 88)
         elif self.action_index == 1:
@@ -35,6 +77,23 @@ class QueueAnimation(BaseAnimation):
             self._draw_dequeue(surface, rect)
         elif self.action_index == 3:
             self._draw_enqueue(surface, rect, 19)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        if not self.values:
+            self.draw_empty(surface, rect, "(cola vacía)")
+            return
+        highlight_front = self.live_op == "peek" or self.live_op == "dequeue"
+        highlight_rear = self.live_op == "enqueue"
+        if not self.live_op:
+            if self.highlight_idx == 0:
+                highlight_front = True
+            elif self.highlight_idx == len(self.values) - 1:
+                highlight_rear = True
+        self._draw_queue_boxes(
+            surface, rect, self.values,
+            highlight_front=highlight_front,
+            highlight_rear=highlight_rear,
+        )
 
     def _draw_queue_boxes(
         self, surface: pygame.Surface, rect: pygame.Rect,

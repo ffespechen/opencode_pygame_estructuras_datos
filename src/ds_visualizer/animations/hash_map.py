@@ -1,8 +1,10 @@
 """Animación visual para Hash Map / Diccionario."""
 
+import copy
+
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 BUCKET_COUNT = 7
@@ -14,22 +16,93 @@ class HashmapAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self._buckets: list[list[tuple[str, int]]] = [
+        self._initial_buckets: list[list[tuple[str, int]]] = [
             [] for _ in range(BUCKET_COUNT)
         ]
-        self._buckets[0].append(("Max", 10))
-        self._buckets[1].append(("Leo", 20))
-        self._buckets[2].append(("Paco", 30))
-        self._buckets[3].append(("Tito", 40))
-        self._buckets[4].append(("Eva", 50))
-        self._buckets[5].append(("Reno", 60))
-        self._buckets[6].append(("Ana", 70))
+        self._initial_buckets[0].append(("Max", 10))
+        self._initial_buckets[1].append(("Leo", 20))
+        self._initial_buckets[2].append(("Paco", 30))
+        self._initial_buckets[3].append(("Tito", 40))
+        self._initial_buckets[4].append(("Eva", 50))
+        self._initial_buckets[5].append(("Reno", 60))
+        self._initial_buckets[6].append(("Ana", 70))
+        self._buckets = copy.deepcopy(self._initial_buckets)
+        self._key_counter = 1
+        self._highlight_bucket = -1
+        self._highlight_key = ""
         self.actions = [
             ("Inserción: colision en bucket 1 (Zoe)", 5.0),
             ("Búsqueda por clave 'Ana'", 5.0),
             ("Eliminación de clave 'Reno'", 5.0),
             ("Inserción: hash('Lia') → bucket 5", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Put", "put",
+                prompt="Clave y valor:", example="Zoe 99",
+            ),
+            Operation(
+                pygame.K_2, "Get", "get",
+                prompt="Clave:", example="Ana",
+            ),
+            Operation(
+                pygame.K_3, "Remove", "remove",
+                prompt="Clave:", example="Reno",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self._buckets = copy.deepcopy(self._initial_buckets)
+        self._key_counter = 1
+        self._highlight_bucket = -1
+        self._highlight_key = ""
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "put":
+            parsed = self.parse_key_value(user_input or "")
+            if parsed is None:
+                return "Formato: clave valor (ej: Zoe 99)"
+            key, val = parsed
+            idx = self._hash_fn(key)
+            bucket = self._buckets[idx]
+            for i, (k, _) in enumerate(bucket):
+                if k == key:
+                    bucket[i] = (key, val)
+                    self._highlight_bucket = idx
+                    self._highlight_key = key
+                    return f"Put('{key}', {val}) actualizado → bucket {idx}"
+            bucket.append((key, val))
+            self._highlight_bucket = idx
+            self._highlight_key = key
+            return f"Put('{key}', {val}) → bucket {idx}"
+        if op_id == "get":
+            key = self.parse_token(user_input or "")
+            if key is None:
+                return "Indicá una clave"
+            idx = self._hash_fn(key)
+            self._highlight_bucket = idx
+            self._highlight_key = key
+            for k, v in self._buckets[idx]:
+                if k == key:
+                    return f"Get('{key}') → {v} (bucket {idx})"
+            return f"Get('{key}') → no encontrada"
+        if op_id == "remove":
+            key = self.parse_token(user_input or "")
+            if key is None:
+                return "Indicá una clave"
+            idx = self._hash_fn(key)
+            bucket = self._buckets[idx]
+            for i, (k, _) in enumerate(bucket):
+                if k == key:
+                    bucket.pop(i)
+                    self._highlight_bucket = idx
+                    self._highlight_key = ""
+                    return f"Remove('{key}') del bucket {idx}"
+            self._highlight_bucket = -1
+            self._highlight_key = ""
+            return f"Remove('{key}'): clave no encontrada"
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -40,6 +113,14 @@ class HashmapAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
         self._draw_hash_fn(surface, rect)
+
+        if self.interactive:
+            self._draw_buckets(
+                surface, rect, self._buckets,
+                highlight_bucket=self._highlight_bucket,
+                highlight_key=self._highlight_key,
+            )
+            return
 
         if self.action_index == 0:
             self._draw_insert_collision(surface, rect)
@@ -55,7 +136,6 @@ class HashmapAnimation(BaseAnimation):
         return sum(ord(c) for c in key) % BUCKET_COUNT
 
     def _buckets_snapshot(self) -> list[list[tuple[str, int]]]:
-        import copy
         return copy.deepcopy(self._buckets)
 
     def _draw_hash_fn(self, surface: pygame.Surface,

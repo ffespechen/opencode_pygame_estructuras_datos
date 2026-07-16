@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class DoublyLinkedListAnimation(BaseAnimation):
@@ -10,19 +10,75 @@ class DoublyLinkedListAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self.values = [15, 42, 8, 73, 56]
+        self._initial = [15, 42, 8, 73, 56]
+        self.values = list(self._initial)
         self.actions = [
             ("Recorrido hacia adelante", 5.0),
             ("Recorrido hacia atrás", 5.0),
             ("Inserción en medio (valor=99)", 5.0),
             ("Eliminación de nodo (valor=73)", 5.0),
         ]
+        self.set_operations([
+            Operation(pygame.K_1, "Forward", "forward"),
+            Operation(pygame.K_2, "Backward", "backward"),
+            Operation(
+                pygame.K_3, "Insert mid", "insert_middle",
+                prompt="Valor:",
+                example="99",
+            ),
+            Operation(
+                pygame.K_4, "Delete", "delete",
+                prompt="Valor a eliminar:",
+                example="73",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial)
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "forward":
+            self.highlight_idx = 0
+            return "Recorrido hacia adelante"
+        if op_id == "backward":
+            n = len(self.values)
+            self.highlight_idx = max(n - 1, 0)
+            return "Recorrido hacia atrás"
+        if op_id == "insert_middle":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            idx = len(self.values) // 2
+            self.values.insert(idx, v)
+            self.highlight_idx = idx
+            return f"Insert {v} en posición {idx}"
+        if op_id == "delete":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            if not self.values:
+                self.highlight_idx = -1
+                return "Lista vacía"
+            try:
+                idx = self.values.index(v)
+            except ValueError:
+                self.highlight_idx = -1
+                return f"Valor {v} no encontrado"
+            self.values.pop(idx)
+            self.highlight_idx = -1
+            return f"Delete {v}"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
 
         if self.action_index == 0:
             self._draw_forward(surface, rect)
@@ -32,6 +88,20 @@ class DoublyLinkedListAnimation(BaseAnimation):
             self._draw_insert_middle(surface, rect)
         elif self.action_index == 3:
             self._draw_delete(surface, rect)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        highlight = self.highlight_idx
+        n = len(self.values)
+
+        if self.live_op == "forward" and n > 0:
+            highlight = min(int(self.live_progress() * n), n - 1)
+        elif self.live_op == "backward" and n > 0:
+            highlight = max(n - 1 - int(self.live_progress() * n), 0)
+
+        if not self.values:
+            self.draw_empty(surface, rect, "(lista vacía)")
+            return
+        self._draw_nodes(surface, rect, self.values, highlight_idx=highlight)
 
     def _draw_nodes(
         self,

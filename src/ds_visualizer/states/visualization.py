@@ -87,9 +87,16 @@ class VisualizationState:
 
     def handle_events(self, events: list[pygame.event.Event]) -> None:
         for event in events:
-            if event.type == pygame.KEYDOWN:
+            if event.type == pygame.TEXTINPUT:
+                if self.animation and self.animation.handle_text(event.text):
+                    continue
+            elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    if self.animation and self.animation.cancel_input():
+                        continue
                     self.back_to_menu = True
+                elif self.animation and self.animation.handle_key(event.key):
+                    continue
             elif event.type == pygame.MOUSEWHEEL:
                 self.info_panel.scroll(event.y * 30)
 
@@ -128,13 +135,19 @@ class VisualizationState:
                 anim_h - 2 * config.ANIMATION_PANEL_PADDING,
             )
             self.animation.draw(screen, anim_rect)
+            self.animation.draw_input_overlay(screen, anim_rect)
 
         info_y = anim_h + 1
         self.info_panel.draw(screen, 0, info_y)
 
         current_action = self.animation.current_action if self.animation else ""
+        mode_hint = (
+            "→Demo" if (self.animation and self.animation.interactive)
+            else "→Interactivo"
+        )
         shortcuts = (
-            "ESC: Menú  |  ↑↓ o Rueda: Desplazar info  |  Ctrl+Q: Salir"
+            f"ESC: Menú  |  I: {mode_hint}  |  R: Reset  |  "
+            "↑↓/Rueda: Info  |  Ctrl+Q: Salir"
         )
         self.shortcuts_bar.draw(
             screen, width, height, shortcuts, current_action,

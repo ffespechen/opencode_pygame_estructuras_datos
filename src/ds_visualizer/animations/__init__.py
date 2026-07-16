@@ -1,6 +1,6 @@
 """Animaciones visuales para cada estructura de datos."""
 
-from .base import BaseAnimation
+from .base import BaseAnimation, Operation
 from .array import ArrayAnimation
 from .linked_list import LinkedListAnimation
 from .doubly_linked_list import DoublyLinkedListAnimation
@@ -22,6 +22,7 @@ from .graph import GraphAnimation
 
 __all__ = [
     "BaseAnimation",
+    "Operation",
     "ArrayAnimation",
     "LinkedListAnimation",
     "DoublyLinkedListAnimation",

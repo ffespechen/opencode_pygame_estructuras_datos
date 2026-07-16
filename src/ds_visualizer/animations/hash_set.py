@@ -4,10 +4,11 @@ import copy
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 BUCKET_COUNT = 7
+_NAME_CYCLE = ("Zoe", "Pia", "Lia", "Tom", "Eva")
 
 
 class HashSetAnimation(BaseAnimation):
@@ -15,15 +16,89 @@ class HashSetAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self._buckets: list[list[str]] = [[] for _ in range(BUCKET_COUNT)]
+        self._initial_buckets: list[list[str]] = [
+            [] for _ in range(BUCKET_COUNT)
+        ]
         for val in ("Ana", "Leo", "Max", "Eva", "Tito"):
-            self._buckets[self._hash_fn(val)].append(val)
+            self._initial_buckets[self._hash_fn(val)].append(val)
+        self._buckets = copy.deepcopy(self._initial_buckets)
+        self._name_idx = 0
+        self._val_counter = 1
+        self._highlight_bucket = -1
+        self._highlight_val = ""
         self.actions = [
             ("Add: insertar 'Zoe'", 5.0),
             ("Contains: ¿está 'Ana'?", 5.0),
             ("Remove: eliminar 'Leo'", 5.0),
             ("Intersección con {Ana, Pia, Max}", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Add", "add",
+                prompt="Valor:", example="Zoe",
+            ),
+            Operation(
+                pygame.K_2, "Contains", "contains",
+                prompt="Valor:", example="Ana",
+            ),
+            Operation(
+                pygame.K_3, "Remove", "remove",
+                prompt="Valor:", example="Leo",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self._buckets = copy.deepcopy(self._initial_buckets)
+        self._name_idx = 0
+        self._val_counter = 1
+        self._highlight_bucket = -1
+        self._highlight_val = ""
+
+    def _next_name(self) -> str:
+        if self._name_idx < len(_NAME_CYCLE):
+            name = _NAME_CYCLE[self._name_idx]
+        else:
+            name = f"V{self._val_counter}"
+            self._val_counter += 1
+        self._name_idx += 1
+        return name
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "add":
+            val = self.parse_token(user_input or "")
+            if val is None:
+                return "Indicá un valor"
+            idx = self._hash_fn(val)
+            if val not in self._buckets[idx]:
+                self._buckets[idx].append(val)
+            self._highlight_bucket = idx
+            self._highlight_val = val
+            return f"Add('{val}') → bucket {idx}"
+        if op_id == "contains":
+            val = self.parse_token(user_input or "")
+            if val is None:
+                return "Indicá un valor"
+            idx = self._hash_fn(val)
+            self._highlight_bucket = idx
+            self._highlight_val = val
+            found = val in self._buckets[idx]
+            return f"Contains('{val}') → {found}"
+        if op_id == "remove":
+            val = self.parse_token(user_input or "")
+            if val is None:
+                return "Indicá un valor"
+            idx = self._hash_fn(val)
+            bucket = self._buckets[idx]
+            if val in bucket:
+                bucket.remove(val)
+                self._highlight_bucket = idx
+                self._highlight_val = ""
+                return f"Remove('{val}') del bucket {idx}"
+            self._highlight_bucket = -1
+            self._highlight_val = ""
+            return f"Remove('{val}'): no está en el conjunto"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
@@ -39,6 +114,14 @@ class HashSetAnimation(BaseAnimation):
             title,
             title.get_rect(center=(rect.centerx, rect.y + 20)),
         )
+
+        if self.interactive:
+            self._draw_buckets(
+                surface, rect, self._buckets,
+                highlight_bucket=self._highlight_bucket,
+                highlight_val=self._highlight_val,
+            )
+            return
 
         if self.action_index == 0:
             self._draw_add(surface, rect)
@@ -166,7 +249,6 @@ class HashSetAnimation(BaseAnimation):
                 result_label=f"A ∩ B  con B = {sorted(other)}"
             )
         else:
-            # mostrar solo resultado en buckets filtrados visualmente
             filtered = [[] for _ in range(BUCKET_COUNT)]
             for v in result:
                 filtered[self._hash_fn(v)].append(v)

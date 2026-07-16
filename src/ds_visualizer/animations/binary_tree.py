@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class BinaryTreeAnimation(BaseAnimation):
@@ -19,6 +19,8 @@ class BinaryTreeAnimation(BaseAnimation):
             5: {"v": 60, "l": None, "r": None},
             6: {"v": 80, "l": None, "r": None},
         }
+        self.bst_values = [50, 30, 70, 20, 40, 60, 80]
+        self._initial_bst = list(self.bst_values)
         self.preorder = [0, 1, 3, 4, 2, 5, 6]
         self.inorder = [3, 1, 4, 0, 5, 2, 6]
         self.postorder = [3, 4, 1, 5, 6, 2, 0]
@@ -28,6 +30,122 @@ class BinaryTreeAnimation(BaseAnimation):
             ("Recorrido Postorden (I-D-R)", 5.0),
             ("Inserción en BST (valor=55)", 5.0),
         ]
+        self.set_operations([
+            Operation(pygame.K_1, "Preorder", "preorder"),
+            Operation(pygame.K_2, "Inorder", "inorder"),
+            Operation(pygame.K_3, "Postorder", "postorder"),
+            Operation(
+                pygame.K_4, "Insert", "insert",
+                prompt="Valor a insertar:", example="55",
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.bst_values = list(self._initial_bst)
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id in ("preorder", "inorder", "postorder"):
+            self.highlight_set = set()
+            return f"Recorrido {op_id}"
+        if op_id == "insert":
+            val = self.parse_int(user_input or "")
+            if val is None:
+                return "Indicá un número entero"
+            self.bst_values = self._bst_insert(self.bst_values, val)
+            self.highlight_set = set()
+            return f"Insert BST: {val}"
+        return ""
+
+    def _bst_insert(self, values: list[int], val: int) -> list[int]:
+        result = list(values)
+        if val not in result:
+            result.append(val)
+        return result
+
+    def _build_nodes_from_values(self, values: list[int]) -> dict:
+        if not values:
+            return {}
+        nodes: dict[int, dict] = {}
+        root_id = 0
+        nodes[root_id] = {"v": values[0], "l": None, "r": None}
+        next_id = 1
+
+        for val in values[1:]:
+            cur = root_id
+            while True:
+                if val < nodes[cur]["v"]:
+                    if nodes[cur]["l"] is None:
+                        nodes[cur]["l"] = next_id
+                        nodes[next_id] = {"v": val, "l": None, "r": None}
+                        next_id += 1
+                        break
+                    cur = nodes[cur]["l"]
+                else:
+                    if nodes[cur]["r"] is None:
+                        nodes[cur]["r"] = next_id
+                        nodes[next_id] = {"v": val, "l": None, "r": None}
+                        next_id += 1
+                        break
+                    cur = nodes[cur]["r"]
+        return nodes
+
+    def _compute_positions_dynamic(
+        self, nodes: dict, rect: pygame.Rect, root: int = 0,
+    ) -> dict[int, tuple[int, int]]:
+        if not nodes or root not in nodes:
+            return {}
+
+        levels: dict[int, list[int]] = {}
+
+        def assign_level(nid: int, lv: int) -> None:
+            levels.setdefault(lv, []).append(nid)
+            node = nodes[nid]
+            if node["l"] is not None:
+                assign_level(node["l"], lv + 1)
+            if node["r"] is not None:
+                assign_level(node["r"], lv + 1)
+
+        assign_level(root, 0)
+        max_level = max(levels.keys())
+        v_spacing = (rect.height - 120) // max(max_level + 1, 1)
+        positions: dict[int, tuple[int, int]] = {}
+
+        for lv in range(max_level + 1):
+            nodes_at_level = levels.get(lv, [])
+            n = len(nodes_at_level)
+            if n == 0:
+                continue
+            h_spacing = rect.width // (n + 1)
+            y = rect.y + 60 + lv * v_spacing
+            for i, nid in enumerate(nodes_at_level):
+                x = rect.x + (i + 1) * h_spacing
+                positions[nid] = (x, y)
+        return positions
+
+    def _traversal_order(self, nodes: dict, kind: str, root: int = 0) -> list[int]:
+        if root not in nodes:
+            return []
+        order: list[int] = []
+
+        def walk(nid: int) -> None:
+            if nid is None or nid not in nodes:
+                return
+            if kind == "preorder":
+                order.append(nid)
+                walk(nodes[nid]["l"])
+                walk(nodes[nid]["r"])
+            elif kind == "inorder":
+                walk(nodes[nid]["l"])
+                order.append(nid)
+                walk(nodes[nid]["r"])
+            else:
+                walk(nodes[nid]["l"])
+                walk(nodes[nid]["r"])
+                order.append(nid)
+
+        walk(root)
+        return order
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -37,6 +155,10 @@ class BinaryTreeAnimation(BaseAnimation):
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
 
         positions = self._compute_positions(rect)
 
@@ -53,6 +175,72 @@ class BinaryTreeAnimation(BaseAnimation):
         edges_drawn: set[tuple[int, int]] = set()
         self._draw_edges(surface, positions, 0, highlighted_nodes, edges_drawn)
         self._draw_nodes_circles(surface, positions, highlighted_nodes)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        nodes = self._build_nodes_from_values(self.bst_values)
+        if not nodes:
+            return
+        positions = self._compute_positions_dynamic(nodes, rect)
+
+        highlighted: set[int] = set()
+        if self.live_op in ("preorder", "inorder", "postorder"):
+            order = self._traversal_order(nodes, self.live_op)
+            count = int(self.live_progress() * (len(order) + 1))
+            highlighted = set(order[:count])
+        elif self.live_op == "insert":
+            highlighted = set(nodes.keys())
+
+        edges_drawn: set[tuple[int, int]] = set()
+        self._draw_edges_interactive(
+            surface, positions, nodes, 0, highlighted, edges_drawn,
+        )
+        self._draw_nodes_interactive(surface, positions, nodes, highlighted)
+
+    def _draw_edges_interactive(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        nodes: dict,
+        node_id: int,
+        highlighted: set[int],
+        drawn: set[tuple[int, int]],
+    ) -> None:
+        if node_id not in nodes:
+            return
+        node = nodes[node_id]
+        for child_key in ("l", "r"):
+            child_id = node[child_key]
+            if child_id is not None and child_id in positions:
+                edge = (node_id, child_id)
+                if edge not in drawn:
+                    drawn.add(edge)
+                    color = (
+                        config.HIGHLIGHT_COLOR
+                        if node_id in highlighted or child_id in highlighted
+                        else config.DIVIDER_COLOR
+                    )
+                    pygame.draw.line(
+                        surface, color, positions[node_id], positions[child_id],
+                        width=2,
+                    )
+                    self._draw_edges_interactive(
+                        surface, positions, nodes, child_id, highlighted, drawn,
+                    )
+
+    def _draw_nodes_interactive(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        nodes: dict,
+        highlighted: set[int],
+    ) -> None:
+        radius = 22
+        for nid, (x, y) in positions.items():
+            is_highlighted = nid in highlighted
+            fg = config.HIGHLIGHT_COLOR if is_highlighted else config.TEXT_COLOR
+            pygame.draw.circle(surface, config.CODE_BG, (x, y), radius)
+            pygame.draw.circle(surface, fg, (x, y), radius, width=2)
+            val = nodes[nid]["v"]
+            val_surf = self._font.render(str(val), True, fg)
+            surface.blit(val_surf, val_surf.get_rect(center=(x, y)))
 
     def _compute_positions(self, rect: pygame.Rect) -> dict[int, tuple[int, int]]:
         levels = {0: 0, 1: 1, 2: 1, 3: 2, 4: 2, 5: 2, 6: 2}
@@ -128,7 +316,6 @@ class BinaryTreeAnimation(BaseAnimation):
 
     def _get_insert_highlight(self) -> set[int]:
         p = self.progress()
-        path = [0, 2, 5]
         if p < 0.3:
             return set()
         elif p < 0.5:

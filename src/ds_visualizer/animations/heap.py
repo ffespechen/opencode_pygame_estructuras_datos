@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class HeapAnimation(BaseAnimation):
@@ -11,13 +11,86 @@ class HeapAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self.heap = [8, 15, 12, 30, 20, 25, 18]
+        self._initial_heap = [8, 15, 12, 30, 20, 25, 18]
+        self.heap = list(self._initial_heap)
+        self._highlight_indices: set[int] = set()
         self.actions = [
             ("Inserción de 5: bubble-up", 5.0),
             ("Extracción del mínimo: bubble-down", 5.0),
             ("Peek: consulta del mínimo", 5.0),
             ("Heapify: convertir array en heap", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Insert", "insert",
+                prompt="Valor:", example="5",
+            ),
+            Operation(pygame.K_2, "Extract-min", "extract"),
+            Operation(pygame.K_3, "Peek", "peek"),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.heap = list(self._initial_heap)
+        self._highlight_indices = set()
+
+    def _bubble_up(self, heap: list[int], idx: int) -> set[int]:
+        path = {idx}
+        while idx > 0:
+            parent = (idx - 1) // 2
+            if heap[idx] < heap[parent]:
+                heap[idx], heap[parent] = heap[parent], heap[idx]
+                path.add(parent)
+                idx = parent
+            else:
+                break
+        return path
+
+    def _bubble_down(self, heap: list[int], idx: int) -> set[int]:
+        path = {idx}
+        n = len(heap)
+        while True:
+            smallest = idx
+            left = 2 * idx + 1
+            right = 2 * idx + 2
+            if left < n and heap[left] < heap[smallest]:
+                smallest = left
+            if right < n and heap[right] < heap[smallest]:
+                smallest = right
+            if smallest == idx:
+                break
+            heap[idx], heap[smallest] = heap[smallest], heap[idx]
+            path.add(smallest)
+            idx = smallest
+        return path
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "insert":
+            val = self.parse_int(user_input or "")
+            if val is None:
+                return "Indicá un número entero"
+            self.heap.append(val)
+            self._highlight_indices = self._bubble_up(self.heap, len(self.heap) - 1)
+            return f"Insert {val} + bubble-up"
+        if op_id == "extract":
+            if not self.heap:
+                self._highlight_indices = set()
+                return "Heap vacío"
+            removed = self.heap[0]
+            last = self.heap.pop()
+            if self.heap:
+                self.heap[0] = last
+                self._highlight_indices = self._bubble_down(self.heap, 0)
+            else:
+                self._highlight_indices = set()
+            return f"Extract-min → {removed}"
+        if op_id == "peek":
+            if not self.heap:
+                self._highlight_indices = set()
+                return "Heap vacío"
+            self._highlight_indices = {0}
+            return f"Peek → mínimo = {self.heap[0]}"
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -28,6 +101,10 @@ class HeapAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
 
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
+
         if self.action_index == 0:
             self._draw_insert(surface, rect)
         elif self.action_index == 1:
@@ -36,6 +113,21 @@ class HeapAnimation(BaseAnimation):
             self._draw_peek(surface, rect)
         elif self.action_index == 3:
             self._draw_heapify(surface, rect)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        n = len(self.heap)
+        if n == 0:
+            return
+        highlighted = set(self._highlight_indices)
+        if self.live_op in ("insert", "extract"):
+            p = self.live_progress()
+            hl_list = sorted(highlighted)
+            count = int(p * (len(hl_list) + 1))
+            highlighted = set(hl_list[:count])
+        positions = self._compute_positions(rect, n)
+        self._draw_edges(surface, positions, n, highlighted)
+        self._draw_nodes(surface, positions, self.heap, highlighted)
+        self._draw_array_bar(surface, rect, self.heap, highlighted)
 
     def _compute_positions(self, rect: pygame.Rect,
                            n: int) -> dict[int, tuple[int, int]]:

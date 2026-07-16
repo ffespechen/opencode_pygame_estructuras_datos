@@ -55,6 +55,20 @@ Cada animación define una lista de tuplas `(nombre, duración)` donde `nombre` 
 - Facilita crear secuencias: la subclase solo consulta `self.progress()` y dibuja en función de ese valor
 - Añadir una nueva acción es agregar una tupla a `self.actions`
 
+### 6b. Modo interactivo (operaciones dinámicas)
+
+Además del ciclo demo, `BaseAnimation` soporta un **modo interactivo** opcional:
+
+- `Operation(key, label, op_id, prompt=..., example=...)` declara las operaciones; si `prompt` está definido, se abre un campo de texto antes de mutar
+- `I` alterna demo ↔ interactivo; `R` llama a `reset()`; `1`…`N` inician la operación (o el prompt)
+- Entrada: `TEXTINPUT` + `Backspace`/`Enter`/`Esc`; barra overlay en el panel de animación (`draw_input_overlay`)
+- Parsers compartidos en `BaseAnimation` (`parse_int`, `parse_pair`, `parse_key_value`, etc.) normalizan formatos como `B F`, `B-F`, `Zoe 99`
+- Ejemplo grafo: **Add edge** pide el par de vértices; **Add vertex** pide la etiqueta; BFS/DFS piden el inicio
+- El estado mutable **persiste** entre operaciones; al volver a demo se hace `reset()` para no contaminar la secuencia pedagógica
+- `Esc` cancela el prompt si está activo; si no, vuelve al menú
+
+**Motivación**: sin pedir datos, operaciones como “agregar arista” son opacas (el sistema elegía extremos arbitrarios). El prompt hace explícita la intención del usuario y unifica el criterio en todas las estructuras.
+
 ### 7. Redimensionamiento adaptativo
 
 - `App._handle_resize()` impone un tamaño mínimo de 800×600

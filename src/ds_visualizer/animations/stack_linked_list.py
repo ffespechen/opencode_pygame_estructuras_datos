@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import BaseAnimation, Operation
 
 
 class StackLinkedListAnimation(BaseAnimation):
@@ -11,18 +11,60 @@ class StackLinkedListAnimation(BaseAnimation):
     def __init__(self) -> None:
         super().__init__()
         self.base_values = [55, 23, 78, 41]
+        self._initial = list(self.base_values)
+        self.values = list(self._initial)
         self.actions = [
             ("Push: insertar en HEAD (99)", 5.0),
             ("Peek: consultar TOP / HEAD", 5.0),
             ("Pop: eliminar HEAD", 5.0),
             ("Push: insertar en HEAD (33)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Push", "push",
+                prompt="Valor a apilar:",
+                example="99",
+            ),
+            Operation(pygame.K_2, "Peek", "peek"),
+            Operation(pygame.K_3, "Pop", "pop"),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial)
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "push":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            self.values.insert(0, v)
+            self.highlight_idx = 0
+            return f"Push {v} en HEAD"
+        if op_id == "peek":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Pila vacía"
+            self.highlight_idx = 0
+            return f"Peek → {self.values[0]}"
+        if op_id == "pop":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Pila vacía"
+            removed = self.values.pop(0)
+            self.highlight_idx = 0 if self.values else -1
+            return f"Pop {removed}"
+        return ""
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
 
         surface.fill(config.PANEL_BG)
+
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
 
         if self.action_index == 0:
             self._draw_push(surface, rect, 99)
@@ -32,6 +74,15 @@ class StackLinkedListAnimation(BaseAnimation):
             self._draw_pop(surface, rect)
         elif self.action_index == 3:
             self._draw_push(surface, rect, 33)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        if not self.values:
+            self.draw_empty(surface, rect, "(pila vacía)")
+            return
+        highlight = 0 if self.live_op in ("peek", "push", "pop") else self.highlight_idx
+        if highlight < 0 and self.values:
+            highlight = 0
+        self._draw_nodes(surface, rect, self.values, highlight_idx=highlight)
 
     def _draw_nodes(
         self,
