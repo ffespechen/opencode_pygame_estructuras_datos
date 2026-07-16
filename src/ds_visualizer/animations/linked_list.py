@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class LinkedListAnimation(BaseAnimation):
@@ -19,18 +24,33 @@ class LinkedListAnimation(BaseAnimation):
             ("Eliminación de nodo (valor=73)", 5.0),
         ]
         self.set_operations([
-            Operation(pygame.K_1, "Traverse", "traverse"),
+            Operation(
+                pygame.K_1, "Traverse", "traverse",
+                complexity="O(n)", mutates=False,
+            ),
             Operation(
                 pygame.K_2, "Insert head", "insert_head",
-                prompt="Valor:",
-                example="99",
+                prompt="Valor:", example="99",
+                complexity="O(1)",
             ),
             Operation(
                 pygame.K_3, "Insert tail", "insert_tail",
-                prompt="Valor:",
-                example="99",
+                prompt="Valor:", example="99",
+                complexity="O(n)",
             ),
-            Operation(pygame.K_4, "Delete head", "delete_head"),
+            Operation(
+                pygame.K_4, "Delete head", "delete_head",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "ll_head_0",
+                "HEAD = 0",
+                "Hacé que el primer nodo valga 0.",
+                "Insert head → 0.",
+                lambda a: bool(a.values) and a.values[0] == 0,
+            ),
         ])
 
     def reset(self) -> None:
@@ -64,6 +84,16 @@ class LinkedListAnimation(BaseAnimation):
             return f"Delete head {removed}"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "traverse" and self.values:
+            return [
+                AnimStep(f"Nodo {i} → {v}", highlight_idx=i)
+                for i, v in enumerate(self.values)
+            ]
+        return []
+
     def update(self, dt: float) -> None:
         super().update(dt)
 
@@ -95,12 +125,15 @@ class LinkedListAnimation(BaseAnimation):
         if not self.values:
             self.draw_empty(surface, rect, "(lista vacía)")
             return
-        self._draw_nodes(surface, rect, self.values, highlight_idx=highlight)
+        self._draw_nodes(
+            surface, rect, self.values, highlight_idx=highlight, register=True,
+        )
 
     def _draw_nodes(
         self, surface: pygame.Surface, rect: pygame.Rect,
         values: list[int], highlight_idx: int = -1,
         show_head_label: bool = True, extra_node_alpha: float = 1.0,
+        register: bool = False,
     ) -> None:
         n = len(values)
         node_w, node_h = 70, 44
@@ -133,10 +166,18 @@ class LinkedListAnimation(BaseAnimation):
             val_rect = val_surf.get_rect(center=node_rect.center)
             surface.blit(val_surf, val_rect)
 
+            if register and val >= 0:
+                self.register_hit(
+                    f"idx:{i}", node_rect, label=f"[{i}]={val}",
+                    index=i, value=val,
+                )
+
             if i < n - 1:
                 arrow_start = (nx + node_w + 2, base_y + node_h // 2)
                 arrow_end = (nx + node_w + gap - 2, base_y + node_h // 2)
-                arrow_color = config.ACCENT_COLOR if i == highlight_idx else config.DIVIDER_COLOR
+                arrow_color = (
+                    config.ACCENT_COLOR if i == highlight_idx else config.DIVIDER_COLOR
+                )
                 pygame.draw.line(surface, arrow_color, arrow_start, arrow_end, width=2)
                 tip_left = (arrow_end[0] - 6, arrow_end[1] - 4)
                 tip_right = (arrow_end[0] - 6, arrow_end[1] + 4)

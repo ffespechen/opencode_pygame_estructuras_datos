@@ -42,12 +42,18 @@ python -m ds_visualizer.main
 
 - **Panel superior (45%)**: animación visual de la estructura de datos a ancho completo
   - **Modo demo** (por defecto): cada estructura cicla acciones animadas (~5 s cada una)
-  - **Modo interactivo** (`I`): el usuario dispara operaciones con teclas numéricas; el estado persiste hasta `R` (reset)
+  - **Modo interactivo** (`I`): operaciones por teclado, toolbar, click y drag; el estado persiste hasta `R` (reset)
   - Las operaciones que necesitan datos **piden entrada** (valor, clave, par de vértices, etc.): escribí y confirmá con `Enter` (cancelar con `Esc`)
+  - **Click** en nodos/celdas para seleccionar; la selección alimenta Search/Delete/BFS/DFS
+  - **Stepper** (`Space` / `←` `→`): recorre algoritmos paso a paso (traverse, search, BFS/DFS, bubble del heap)
+  - **Undo** (`U`) y badge de **complejidad** (`O(1)`, `O(n)`, …) tras cada operación
+  - **Toolbar** de botones (ops + Undo / Reset / Reto / Hint) sobre la barra de atajos
+  - **Drag & drop** (array swap, aristas en grafo) y **retos** (`C`) con hint (`H`)
 - **Panel inferior (55%)**: información teórica de la estructura cargada desde archivos `.md` individuales
   - Renderiza títulos, encabezados, listas con viñetas, bloques de código con fondo y texto normal con ajuste de línea
   - Desplazamiento vertical con flechas ↑↓ o rueda del ratón
-- **Barra inferior**: atajos a la izquierda; a la derecha, la acción demo o las operaciones disponibles en modo interactivo
+- **Barra inferior**: atajos a la izquierda; a la derecha, la acción demo, paso actual o feedback
+- **Toolbar de operaciones**: botones clickeables equivalentes a `1`…`N`
 
 ### Estructuras de datos implementadas
 
@@ -85,13 +91,19 @@ python -m ds_visualizer.main
 |---|---|
 | `Ctrl+Q` | Salir de la aplicación (desde cualquier pantalla) |
 | `↑ ↓` | Navegar opciones del menú / desplazar panel de información |
-| `Enter` | Seleccionar estructura en el menú |
-| `ESC` | Volver al menú desde la visualización |
+| `Enter` | Seleccionar estructura en el menú / confirmar prompt / fin stepper |
+| `ESC` | Cancelar prompt/stepper; si no, volver al menú |
 | `I` | Alternar modo demo ↔ interactivo (en visualización) |
-| `R` | Reiniciar la estructura al estado inicial (modo interactivo) |
+| `R` | Reiniciar la estructura al estado inicial |
+| `U` | Deshacer última operación mutante |
+| `C` | Iniciar / rotar reto (`Shift+C` cancela) |
+| `H` | Hint del reto activo |
+| `Space` / `→` | Siguiente paso del stepper |
+| `←` / `,` | Paso anterior del stepper |
 | `1`…`9` | Ejecutar la operación correspondiente (también activa el modo interactivo) |
-| Texto + `Enter` | Completar el dato pedido por la operación (ej. par `B F` para una arista) |
-| `Esc` | Cancelar el prompt de entrada; si no hay prompt, volver al menú |
+| Click | Seleccionar nodo/celda; botones de la toolbar |
+| Drag | Soltar sobre otro elemento (swap en array; arista en grafo) |
+| Texto + `Enter` | Completar el dato pedido por la operación |
 | `Rueda ratón` | Desplazar panel de información |
 
 ### Archivos de datos

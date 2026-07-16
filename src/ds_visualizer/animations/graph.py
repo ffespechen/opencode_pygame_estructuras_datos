@@ -5,7 +5,13 @@ import math
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    HitTarget,
+    Operation,
+)
 
 
 class GraphAnimation(BaseAnimation):
@@ -36,27 +42,44 @@ class GraphAnimation(BaseAnimation):
         self.set_operations([
             Operation(
                 pygame.K_1, "BFS", "bfs",
-                prompt="Inicio BFS:",
-                example="A",
+                prompt="Inicio BFS:", example="A",
+                complexity="O(V+E)", mutates=False, uses_selection=True,
             ),
             Operation(
                 pygame.K_2, "DFS", "dfs",
-                prompt="Inicio DFS:",
-                example="A",
+                prompt="Inicio DFS:", example="A",
+                complexity="O(V+E)", mutates=False, uses_selection=True,
             ),
             Operation(
                 pygame.K_3, "Add vertex", "add_vertex",
-                prompt="Etiqueta del vértice:",
-                example="G",
+                prompt="Etiqueta del vértice:", example="G",
+                complexity="O(1)",
             ),
             Operation(
                 pygame.K_4, "Add edge", "add_edge",
-                prompt="Par de vértices:",
-                example="B F",
+                prompt="Par de vértices:", example="B F",
+                complexity="O(1)", uses_selection=True,
             ),
         ])
         self.extra_vertex = None
         self.extra_edge = None
+        self._edge_pending: str | None = None
+        self.set_challenges([
+            Challenge(
+                "graph_has_g",
+                "Creá el vértice G",
+                "Agregá un vértice con etiqueta G.",
+                "Add vertex → G.",
+                lambda a: any(v.upper() == "G" for v in a.vertices.values()),
+            ),
+            Challenge(
+                "graph_edge_af",
+                "Conectá A-F",
+                "Creá la arista entre A y F.",
+                "Add edge → A F, o arrastrá A sobre F.",
+                lambda a: _graph_has_edge(a, "A", "F"),
+            ),
+        ])
 
     def reset(self) -> None:
         super().reset()
@@ -67,6 +90,7 @@ class GraphAnimation(BaseAnimation):
         self._last_order = []
         self.extra_vertex = None
         self.extra_edge = None
+        self._edge_pending = None
 
     def _label_to_id(self, label: str) -> int | None:
         label = label.strip().upper()
@@ -160,6 +184,67 @@ class GraphAnimation(BaseAnimation):
 
         return ""
 
+    def selection_as_input(self, op: Operation) -> str | None:
+        if not self.selected_id:
+            return None
+        if op.op_id in ("bfs", "dfs"):
+            return self.selected_label.split()[0] if self.selected_label else None
+        if op.op_id == "add_edge":
+            # Primer click guarda extremo; segundo completa el par
+            label = self.selected_label.split()[0] if self.selected_label else ""
+            if not label:
+                return None
+            if self._edge_pending and self._edge_pending != label:
+                pair = f"{self._edge_pending} {label}"
+                self._edge_pending = None
+                return pair
+            self._edge_pending = label
+            self.status_message = f"Arista: elegí el otro extremo (tenés {label})"
+            self._status_timer = self.STATUS_DURATION
+            return None
+        return super().selection_as_input(op)
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id in ("bfs", "dfs") and self._last_order:
+            name = "BFS" if op_id == "bfs" else "DFS"
+            steps: list[AnimStep] = []
+            seen: list[int] = []
+            for vid in self._last_order:
+                seen.append(vid)
+                label = self.vertices.get(vid, "?")
+                steps.append(AnimStep(
+                    f"{name}: visitar {label}",
+                    highlight_set=frozenset(seen),
+                    note=f"cola/pila → {label}",
+                ))
+            return steps
+        return []
+
+    def on_drop(self, source_id: str, dest: HitTarget | None) -> str:
+        if dest is None:
+            return ""
+        if not source_id.startswith("v:") or not dest.target_id.startswith("v:"):
+            return ""
+        try:
+            a = int(source_id.split(":")[1])
+            b = int(dest.target_id.split(":")[1])
+        except (IndexError, ValueError):
+            return ""
+        if a == b:
+            return ""
+        edge = tuple(sorted((a, b)))
+        existing = {tuple(sorted(e)) for e in self.edges}
+        if edge in existing:
+            return f"Arista {self.vertices[a]}-{self.vertices[b]} ya existe"
+        self.edges.append((a, b))
+        self._highlighted = {a, b}
+        return (
+            f"Arista {self.vertices[a]}-{self.vertices[b]} "
+            f"(drag)  [O(1)]"
+        )
+
     def update(self, dt: float) -> None:
         super().update(dt)
         if not self.interactive:
@@ -200,10 +285,10 @@ class GraphAnimation(BaseAnimation):
             highlighted = set(self._last_order[:count])
         active_edges = self._get_active_edges(positions, highlighted)
         self._draw_edges_lines(surface, positions, active_edges, highlighted)
-        self._draw_vertices_circles(surface, positions, highlighted)
+        self._draw_vertices_circles(surface, positions, highlighted, register=True)
 
         hint = self._font.render(
-            "4: arista pide par (ej: B F)  |  3: etiqueta del vértice",
+            "Click vértice + BFS/DFS  |  Drag A→B = arista  |  Space = paso",
             True,
             config.SUBTEXT_COLOR,
         )
@@ -254,6 +339,7 @@ class GraphAnimation(BaseAnimation):
         self, surface: pygame.Surface,
         positions: dict[int, tuple[int, int]],
         highlighted: set[int],
+        register: bool = False,
     ) -> None:
         radius = 24
         for vid, (x, y) in positions.items():
@@ -269,6 +355,12 @@ class GraphAnimation(BaseAnimation):
             val_surf = self._font.render(label, True, fg)
             val_rect = val_surf.get_rect(center=(x, y))
             surface.blit(val_surf, val_rect)
+
+            if register:
+                hit = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
+                self.register_hit(
+                    f"v:{vid}", hit, label=label, index=vid, draggable=True,
+                )
 
     def _get_active_edges(
         self, positions: dict[int, tuple[int, int]], highlighted: set[int],
@@ -303,3 +395,11 @@ class GraphAnimation(BaseAnimation):
             return {1, 5}
         self.extra_edge = (1, 5)
         return {1, 5}
+
+
+def _graph_has_edge(anim: GraphAnimation, la: str, lb: str) -> bool:
+    ids = {name: vid for vid, name in anim.vertices.items()}
+    if la not in ids or lb not in ids:
+        return False
+    edge = tuple(sorted((ids[la], ids[lb])))
+    return edge in {tuple(sorted(e)) for e in anim.edges}

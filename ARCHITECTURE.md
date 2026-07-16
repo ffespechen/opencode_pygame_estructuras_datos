@@ -63,20 +63,24 @@ Cada animación define una lista de tuplas `(nombre, duración)` donde `nombre` 
 
 Además del ciclo demo, `BaseAnimation` soporta un **modo interactivo** opcional:
 
-- `Operation(key, label, op_id, prompt=..., example=...)` declara las operaciones; si `prompt` está definido, se abre un campo de texto antes de mutar
-- `I` alterna demo ↔ interactivo; `R` llama a `reset()`; `1`…`N` inician la operación (o el prompt)
-- Entrada: `TEXTINPUT` + `Backspace`/`Enter`/`Esc`; barra overlay en el panel de animación (`draw_input_overlay`)
-- Parsers compartidos en `BaseAnimation` (`parse_int`, `parse_pair`, `parse_key_value`, etc.) normalizan formatos como `B F`, `B-F`, `Zoe 99`
-- Ejemplo grafo: **Add edge** pide el par de vértices; **Add vertex** pide la etiqueta; BFS/DFS piden el inicio
-- El estado mutable **persiste** entre operaciones; al volver a demo se hace `reset()` para no contaminar la secuencia pedagógica
-- `Esc` cancela el prompt si está activo; si no, vuelve al menú
+- `Operation(key, label, op_id, prompt=..., example=..., complexity=..., uses_selection=...)` declara las operaciones
+- `I` alterna demo ↔ interactivo; `R` llama a `reset()`; `1`…`N` / toolbar inician la operación
+- Entrada: `TEXTINPUT` + `Backspace`/`Enter`/`Esc`; barra overlay (`draw_input_overlay`)
+- **Click / selección**: `register_hit` durante `draw`; anillo cyan; alimenta prompts (`uses_selection`)
+- **Stepper**: `build_steps()` → `Space`/`←`/`→`; progreso por paso en lugar de solo timer
+- **Undo**: `capture_state` / `restore_state` (attrs auto + overrides); tecla `U`
+- **Feedback**: badge de complejidad y detalle en overlays
+- **Toolbar** (`OpToolbar`): botones de ops + Undo/Reset/Reto/Hint
+- **Drag & drop**: `on_drop(source, dest)` (array swap, aristas en grafo)
+- **Retos**: `Challenge` + tecla `C` / `H`; validación tras cada op
 
-**Motivación**: sin pedir datos, operaciones como “agregar arista” son opacas (el sistema elegía extremos arbitrarios). El prompt hace explícita la intención del usuario y unifica el criterio en todas las estructuras.
+**Motivación**: pasar de “ver la demo” a manipular la estructura como instrumento didáctico, con control fino (stepper) y refuerzo (retos), sin acoplar el visualizador al juego WOZ.
 
 ### 7. Redimensionamiento adaptativo
 
 - `App._handle_resize()` impone un tamaño mínimo de 800×600
-- En `VisualizationState`, el layout vertical usa proporción fija: panel superior (animación) = 45%, panel inferior (texto) = 55% del alto de contenido
+- En `VisualizationState`, el layout vertical usa proporción fija: panel superior (animación) = 45%, panel inferior (texto) = 55% del alto de contenido (descontando toolbar + barra de atajos)
+- Debajo del panel de info: `OpToolbar` (botones) + `ShortcutsBar`
 - `InfoPanel.load_markdown()` recibe el ancho y alto visibles y re-renderiza el contenido a ancho completo (`width - 2 * padding`)
 - Las animaciones reciben un `pygame.Rect` y dibujan relativo a él (sin coordenadas absolutas)
 

@@ -2,7 +2,13 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    HitTarget,
+    Operation,
+)
 
 
 class ArrayAnimation(BaseAnimation):
@@ -23,23 +29,53 @@ class ArrayAnimation(BaseAnimation):
         ]
         self._search_target: int | None = None
         self.set_operations([
-            Operation(pygame.K_1, "Traverse", "traverse"),
+            Operation(
+                pygame.K_1, "Traverse", "traverse",
+                complexity="O(n)", mutates=False,
+            ),
             Operation(
                 pygame.K_2, "Search", "search",
-                prompt="Valor a buscar:",
-                example="63",
+                prompt="Valor a buscar:", example="63",
+                complexity="O(n)", mutates=False, uses_selection=True,
             ),
             Operation(
                 pygame.K_3, "Insert", "insert",
-                prompt="Valor a insertar:",
-                example="99",
+                prompt="Valor a insertar:", example="99",
+                complexity="O(1) amortizado",
             ),
             Operation(
                 pygame.K_4, "Delete", "delete",
-                prompt="Índice a eliminar:",
-                example="2",
+                prompt="Índice a eliminar:", example="2",
+                complexity="O(n)", uses_selection=True,
             ),
         ])
+        self.set_challenges([
+            Challenge(
+                "array_len5",
+                "Dejá 5 elementos",
+                "Usá Insert/Delete hasta que el array tenga exactamente 5 valores.",
+                "Insert agrega al final; Delete pide un índice (o click + Delete).",
+                lambda a: len(a.values) == 5,
+            ),
+            Challenge(
+                "array_has_7",
+                "Incluí un 7",
+                "Insertá el valor 7 en el array.",
+                "Insert → escribí 7 → Enter.",
+                lambda a: 7 in a.values,
+            ),
+        ])
+
+    def capture_state(self) -> dict:
+        state = super().capture_state()
+        state["values"] = list(self.values)
+        state["_search_target"] = self._search_target
+        return state
+
+    def restore_state(self, state: dict) -> None:
+        super().restore_state(state)
+        self.values = list(state.get("values", self._initial))
+        self._search_target = state.get("_search_target")
 
     def reset(self) -> None:
         super().reset()
@@ -90,6 +126,50 @@ class ArrayAnimation(BaseAnimation):
             return f"Delete {removed} en índice {idx}"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "traverse" and self.values:
+            return [
+                AnimStep(f"Índice {i} → {self.values[i]}", highlight_idx=i)
+                for i in range(len(self.values))
+            ]
+        if op_id == "search" and self.values and self._search_target is not None:
+            target = self._search_target
+            steps: list[AnimStep] = []
+            for i, val in enumerate(self.values):
+                if val == target:
+                    steps.append(AnimStep(
+                        f"Comparar [{i}]={val} == {target} → encontrado",
+                        highlight_idx=i,
+                        note="match",
+                    ))
+                    break
+                steps.append(AnimStep(
+                    f"Comparar [{i}]={val} ≠ {target}",
+                    highlight_idx=i,
+                ))
+            else:
+                steps.append(AnimStep(f"{target} no está en el array", note="miss"))
+            return steps
+        return []
+
+    def on_drop(self, source_id: str, dest: HitTarget | None) -> str:
+        if dest is None or not source_id.startswith("idx:"):
+            return ""
+        if not dest.target_id.startswith("idx:"):
+            return ""
+        try:
+            src = int(source_id.split(":")[1])
+            dst = int(dest.target_id.split(":")[1])
+        except (IndexError, ValueError):
+            return ""
+        if src == dst or src >= len(self.values) or dst >= len(self.values):
+            return ""
+        self.values[src], self.values[dst] = self.values[dst], self.values[src]
+        self.highlight_idx = dst
+        return f"Swap [{src}] ↔ [{dst}]  [O(1)]"
+
     def update(self, dt: float) -> None:
         super().update(dt)
 
@@ -116,7 +196,9 @@ class ArrayAnimation(BaseAnimation):
         highlight = self.highlight_idx
         second = -1
 
-        if self.live_op == "traverse":
+        if self.step_mode and self.steps:
+            highlight = self.highlight_idx
+        elif self.live_op == "traverse":
             n = len(self.values)
             if n > 0:
                 highlight = min(int(self.live_progress() * n), n - 1)
@@ -135,13 +217,15 @@ class ArrayAnimation(BaseAnimation):
                     current = int(self.live_progress() * n)
                     highlight = min(current, n - 1)
 
-        self._draw_boxes(surface, rect, self.values, highlight_idx=highlight,
-                         second_highlight=second)
+        self._draw_boxes(
+            surface, rect, self.values,
+            highlight_idx=highlight, second_highlight=second, register=True,
+        )
 
     def _draw_boxes(
         self, surface: pygame.Surface, rect: pygame.Rect,
         values: list[int], highlight_idx: int = -1,
-        second_highlight: int = -1,
+        second_highlight: int = -1, register: bool = False,
     ) -> None:
         n = len(values)
         box_size = min(70, (rect.width - 40) // max(n, 1) - 8)
@@ -164,15 +248,25 @@ class ArrayAnimation(BaseAnimation):
             else:
                 color = config.TEXT_COLOR
                 pygame.draw.rect(surface, config.CODE_BG, box_rect, border_radius=6)
-                pygame.draw.rect(surface, config.DIVIDER_COLOR, box_rect, width=1, border_radius=6)
+                pygame.draw.rect(
+                    surface, config.DIVIDER_COLOR, box_rect, width=1, border_radius=6
+                )
 
-            val_surf = self._font.render(str(val), True, color if i == highlight_idx else config.TEXT_COLOR)
+            val_surf = self._font.render(
+                str(val), True,
+                color if i == highlight_idx else config.TEXT_COLOR,
+            )
             val_rect = val_surf.get_rect(center=box_rect.center)
             surface.blit(val_surf, val_rect)
 
             idx_surf = self._font.render(str(i), True, config.SUBTEXT_COLOR)
             idx_rect = idx_surf.get_rect(center=(box_rect.centerx, box_rect.top - 14))
             surface.blit(idx_surf, idx_rect)
+
+            if register:
+                self.register_hit(
+                    f"idx:{i}", box_rect, label=f"[{i}]={val}", index=i, value=val,
+                )
 
     def _draw_traverse(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         p = self.progress()
@@ -207,10 +301,11 @@ class ArrayAnimation(BaseAnimation):
             for j in range(shift_count):
                 idx = n - 1 - j
                 if idx >= ti:
-                    display_values[idx] = display_values[idx - 1] if idx > ti else self.values[ti]
+                    display_values[idx] = (
+                        display_values[idx - 1] if idx > ti else self.values[ti]
+                    )
             self._draw_boxes(surface, rect, display_values, highlight_idx=ti)
         else:
-            reveal_progress = (p - 0.5) / 0.5
             display_values = list(self.values)
             for j in range(n - 1, ti, -1):
                 display_values[j] = display_values[j - 1]

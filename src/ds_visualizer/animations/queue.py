@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import BaseAnimation, Challenge, Operation
 
 
 class QueueAnimation(BaseAnimation):
@@ -22,11 +22,26 @@ class QueueAnimation(BaseAnimation):
         self.set_operations([
             Operation(
                 pygame.K_1, "Enqueue", "enqueue",
-                prompt="Valor a encolar:",
-                example="88",
+                prompt="Valor a encolar:", example="88",
+                complexity="O(1)",
             ),
-            Operation(pygame.K_2, "Peek", "peek"),
-            Operation(pygame.K_3, "Dequeue", "dequeue"),
+            Operation(
+                pygame.K_2, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+            Operation(
+                pygame.K_3, "Dequeue", "dequeue",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "queue_front_9",
+                "FRONT = 9",
+                "Dejá el valor 9 al frente de la cola.",
+                "Dequeue hasta vaciar y Enqueue 9, o Dequeue + Enqueue estratégicamente.",
+                lambda a: bool(a.values) and a.values[0] == 9,
+            ),
         ])
 
     def reset(self) -> None:
@@ -93,6 +108,7 @@ class QueueAnimation(BaseAnimation):
             surface, rect, self.values,
             highlight_front=highlight_front,
             highlight_rear=highlight_rear,
+            register=True,
         )
 
     def _draw_queue_boxes(
@@ -101,6 +117,7 @@ class QueueAnimation(BaseAnimation):
         highlight_rear: bool = False,
         extra_item: tuple[int, float, str] | None = None,
         slide_out: int = -1,
+        register: bool = False,
     ) -> None:
         box_w, box_h = 64, 44
         gap = 10
@@ -148,6 +165,13 @@ class QueueAnimation(BaseAnimation):
             val_rect = val_surf.get_rect(center=temp_surf.get_rect().center)
             temp_surf.blit(val_surf, val_rect)
             surface.blit(temp_surf, box_rect)
+
+            if register and alpha > 200:
+                tag = " FRONT" if is_front else (" REAR" if is_rear else "")
+                self.register_hit(
+                    f"idx:{i}", box_rect, label=f"[{i}]={val}{tag}",
+                    index=i, value=val,
+                )
 
         if extra_item:
             val, alpha_progress, position = extra_item

@@ -2,7 +2,13 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    HitTarget,
+    Operation,
+)
 
 
 class HeapAnimation(BaseAnimation):
@@ -24,9 +30,25 @@ class HeapAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Insert", "insert",
                 prompt="Valor:", example="5",
+                complexity="O(log n)",
             ),
-            Operation(pygame.K_2, "Extract-min", "extract"),
-            Operation(pygame.K_3, "Peek", "peek"),
+            Operation(
+                pygame.K_2, "Extract-min", "extract",
+                complexity="O(log n)",
+            ),
+            Operation(
+                pygame.K_3, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "heap_min_1",
+                "Mínimo = 1",
+                "Insertá valores hasta que el mínimo del heap sea 1.",
+                "Insert → 1 (bubble-up lo sube a la raíz).",
+                lambda a: bool(a.heap) and a.heap[0] == 1,
+            ),
         ])
 
     def reset(self) -> None:
@@ -92,6 +114,27 @@ class HeapAnimation(BaseAnimation):
             return f"Peek → mínimo = {self.heap[0]}"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id in ("insert", "extract") and self._highlight_indices:
+            ordered = sorted(self._highlight_indices)
+            steps: list[AnimStep] = []
+            seen: list[int] = []
+            for idx in ordered:
+                seen.append(idx)
+                val = self.heap[idx] if idx < len(self.heap) else "?"
+                steps.append(AnimStep(
+                    f"Bubble en índice {idx} (val={val})",
+                    highlight_set=frozenset(seen),
+                    note="O(log n)",
+                ))
+            return steps
+        return []
+
+    def on_drop(self, source_id: str, dest: HitTarget | None) -> str:
+        return ""
+
     def update(self, dt: float) -> None:
         super().update(dt)
 
@@ -119,15 +162,17 @@ class HeapAnimation(BaseAnimation):
         if n == 0:
             return
         highlighted = set(self._highlight_indices)
-        if self.live_op in ("insert", "extract"):
+        if self.step_mode and self.highlight_set:
+            highlighted = set(self.highlight_set)
+        elif self.live_op in ("insert", "extract"):
             p = self.live_progress()
             hl_list = sorted(highlighted)
             count = int(p * (len(hl_list) + 1))
             highlighted = set(hl_list[:count])
         positions = self._compute_positions(rect, n)
         self._draw_edges(surface, positions, n, highlighted)
-        self._draw_nodes(surface, positions, self.heap, highlighted)
-        self._draw_array_bar(surface, rect, self.heap, highlighted)
+        self._draw_nodes(surface, positions, self.heap, highlighted, register=True)
+        self._draw_array_bar(surface, rect, self.heap, highlighted, register=True)
 
     def _compute_positions(self, rect: pygame.Rect,
                            n: int) -> dict[int, tuple[int, int]]:
@@ -177,7 +222,8 @@ class HeapAnimation(BaseAnimation):
 
     def _draw_nodes(self, surface: pygame.Surface,
                     positions: dict[int, tuple[int, int]],
-                    values: list[int], highlighted: set[int]) -> None:
+                    values: list[int], highlighted: set[int],
+                    register: bool = False) -> None:
         radius = 20
         for i, (x, y) in positions.items():
             is_hl = i in highlighted
@@ -193,9 +239,16 @@ class HeapAnimation(BaseAnimation):
             vr = val_surf.get_rect(center=(x, y))
             surface.blit(val_surf, vr)
 
+            if register:
+                hit = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
+                self.register_hit(
+                    f"idx:{i}", hit, label=f"[{i}]={val}", index=i, value=val,
+                )
+
     def _draw_array_bar(self, surface: pygame.Surface, rect: pygame.Rect,
                         values: list[int],
-                        highlight_indices: set[int]) -> None:
+                        highlight_indices: set[int],
+                        register: bool = False) -> None:
         n = len(values)
         if n == 0:
             return
@@ -224,6 +277,10 @@ class HeapAnimation(BaseAnimation):
                 center=(br.centerx, sy - 12)
             )
             surface.blit(idx_s, ir)
+            if register:
+                self.register_hit(
+                    f"arr:{i}", br, label=f"[{i}]={v}", index=i, value=v,
+                )
 
     def _draw_insert(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         p = self.progress()
