@@ -9,6 +9,7 @@ from .stack import StackAnimation
 from .stack_linked_list import StackLinkedListAnimation
 from .queue import QueueAnimation
 from .queue_linked_list import QueueLinkedListAnimation
+from .trie import TrieAnimation
 from .hash_map import HashmapAnimation
 from .binary_tree import BinaryTreeAnimation
 from .heap import HeapAnimation
@@ -24,6 +25,7 @@ __all__ = [
     "StackLinkedListAnimation",
     "QueueAnimation",
     "QueueLinkedListAnimation",
+    "TrieAnimation",
     "HashmapAnimation",
     "BinaryTreeAnimation",
     "HeapAnimation",
