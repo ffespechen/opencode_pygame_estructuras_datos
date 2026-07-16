@@ -60,6 +60,7 @@ python -m ds_visualizer.main
 | **AVL Tree** | Insertar con desbalance LL, rotación derecha, desbalance RR, rotación izquierda |
 | **Union-Find** | Find raíz, Union de conjuntos, Union adicional, path compression |
 | **Hash Set** | Add, Contains, Remove, Intersección |
+| **Priority Queue** | Enqueue por prioridad, Peek, Dequeue (máx. prioridad), Enqueue |
 | **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |
 | **Binary Tree** | Recorridos preorden, inorden, postorden e inserción en BST |
 | **Heap / Montículo** | Inserción con bubble-up, extracción con bubble-down, Peek (mínimo), Heapify |

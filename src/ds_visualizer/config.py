@@ -50,6 +50,7 @@ DS_OPTIONS = [
     ("AVL Tree", "avl"),
     ("Union-Find", "union_find"),
     ("Hash Set", "hash_set"),
+    ("Priority Queue", "priority_queue"),
     ("Hash Maps o Diccionarios", "hash_map"),
     ("Binary Tree", "binary_tree"),
     ("Heap", "heap"),
