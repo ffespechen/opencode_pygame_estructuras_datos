@@ -40,6 +40,7 @@ DATA_DIR = Path(__file__).parent / "data"
 DS_OPTIONS = [
     ("Array o Lista", "array"),
     ("Linked List", "linked_list"),
+    ("Doubly Linked List", "doubly_linked_list"),
     ("Stack o Pila", "stack"),
     ("Queue o Cola", "queue"),
     ("Hash Maps o Diccionarios", "hash_map"),

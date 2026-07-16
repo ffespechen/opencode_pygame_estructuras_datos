@@ -6,6 +6,7 @@ from ds_visualizer.ui import InfoPanel, ShortcutsBar
 from ds_visualizer.animations import (
     ArrayAnimation,
     LinkedListAnimation,
+    DoublyLinkedListAnimation,
     StackAnimation,
     QueueAnimation,
     HashmapAnimation,
@@ -18,6 +19,7 @@ from ds_visualizer.animations import (
 ANIMATION_MAP = {
     "array": ArrayAnimation,
     "linked_list": LinkedListAnimation,
+    "doubly_linked_list": DoublyLinkedListAnimation,
     "stack": StackAnimation,
     "queue": QueueAnimation,
     "hash_map": HashmapAnimation,

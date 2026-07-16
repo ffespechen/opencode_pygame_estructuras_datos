@@ -12,7 +12,7 @@ Se adoptó el layout `src/` (con `src/ds_visualizer/`) siguiendo las recomendaci
 
 La aplicación alterna entre dos modos mutuamente excluyentes:
 
-- **MenuState**: pantalla inicial de selección (9 opciones: 8 estructuras + "Salir")
+- **MenuState**: pantalla inicial de selección (estructuras de datos + "Salir")
 - **VisualizationState**: pantalla dividida verticalmente con animación e información
 
 Cada estado implementa una interfaz implícita con los métodos `on_enter()`, `on_resize()`, `handle_events()`, `update(dt)`, `draw(screen, w, h)`. La clase `App` en `app.py` actúa como orquestador y decide cuándo transicionar basándose en banderas (`selected_ds`, `back_to_menu`). La opción "Salir" usa la clave especial `"__quit__"` que `App` detecta y provoca `running = False`.
@@ -117,7 +117,7 @@ El cierre de la aplicación se captura de tres formas en `App.handle_events()`:
 
 ### 12. Opción Salir en el menú
 
-La novena opción del menú (`"Salir"`, clave `"__quit__"`) permite cerrar la aplicación desde el propio menú sin usar `Ctrl+Q`. Se distingue visualmente:
+La última opción del menú (`"Salir"`, clave `"__quit__"`) permite cerrar la aplicación desde el propio menú sin usar `Ctrl+Q`. Se distingue visualmente:
 - Línea divisoria horizontal encima separándola de las estructuras de datos
 - Color atenuado (`SUBTEXT_COLOR`) cuando no está seleccionada
 - Mismo resaltado azul que las demás opciones al estar seleccionada

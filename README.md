@@ -2,7 +2,7 @@
 
 ## Descripción del proyecto
 
-Aplicación interactiva desarrollada con **Pygame** que permite explorar visualmente ocho estructuras de datos fundamentales. El usuario selecciona una estructura desde un menú y accede a una pantalla dividida verticalmente: en la parte superior se muestra una representación gráfica animada de la estructura en acción, y debajo información teórica detallada (características, elementos, casos de uso y pseudocódigo) cargada desde archivos markdown editables.
+Aplicación interactiva desarrollada con **Pygame** que permite explorar visualmente estructuras de datos fundamentales. El usuario selecciona una estructura desde un menú y accede a una pantalla dividida verticalmente: en la parte superior se muestra una representación gráfica animada de la estructura en acción, y debajo información teórica detallada (características, elementos, casos de uso y pseudocódigo) cargada desde archivos markdown editables.
 
 ## Tecnologías / frameworks / librerías utilizadas
 
@@ -29,8 +29,8 @@ python -m ds_visualizer.main
 
 ### Menú principal
 
-- Lista de 9 opciones navegable con flechas ↑↓ y selección con Enter
-- 8 estructuras de datos más la opción "Salir" al final, separada por una línea divisoria
+- Lista de opciones navegable con flechas ↑↓ y selección con Enter
+- Estructuras de datos más la opción "Salir" al final, separada por una línea divisoria
 - La opción "Salir" aparece en color atenuado cuando no está seleccionada
 - Título y subtítulo centrados dinámicamente
 - Opción seleccionada resaltada con borde azul y fondo diferenciado
@@ -50,6 +50,7 @@ python -m ds_visualizer.main
 |---|---|
 | **Array / Lista** | Recorrido por índice, búsqueda lineal, inserción, eliminación |
 | **Linked List** | Recorrido de nodos, inserción al inicio, inserción al final, eliminación |
+| **Doubly Linked List** | Recorrido adelante, recorrido atrás, inserción en medio, eliminación |
 | **Stack / Pila** | Push (apilar), Peek (consultar tope), Pop (desapilar), Push — tope arriba |
 | **Queue / Cola** | Enqueue (encolar), Peek (consultar frente), Dequeue (desencolar), Enqueue |
 | **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |

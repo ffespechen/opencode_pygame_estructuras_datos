@@ -3,6 +3,7 @@
 from .base import BaseAnimation
 from .array import ArrayAnimation
 from .linked_list import LinkedListAnimation
+from .doubly_linked_list import DoublyLinkedListAnimation
 from .stack import StackAnimation
 from .queue import QueueAnimation
 from .hash_map import HashmapAnimation
@@ -14,6 +15,7 @@ __all__ = [
     "BaseAnimation",
     "ArrayAnimation",
     "LinkedListAnimation",
+    "DoublyLinkedListAnimation",
     "StackAnimation",
     "QueueAnimation",
     "HashmapAnimation",
