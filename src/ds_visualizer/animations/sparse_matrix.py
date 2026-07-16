@@ -5,7 +5,12 @@ import random
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class SparseMatrixAnimation(BaseAnimation):
@@ -33,12 +38,31 @@ class SparseMatrixAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Insert", "insert",
                 prompt="Fila col valor:", example="1 1 9",
+                complexity="O(k)",
             ),
             Operation(
                 pygame.K_2, "Search", "search",
                 prompt="Fila col:", example="2 0",
+                complexity="O(k)", mutates=False, uses_selection=True,
             ),
-            Operation(pygame.K_3, "Traverse", "traverse"),
+            Operation(
+                pygame.K_3, "Traverse", "traverse",
+                complexity="O(k)", mutates=False,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "sp_11", "Celda (1,1)=9",
+                "Insertá 9 en (1,1).", "Insert → 1 1 9",
+                lambda a: any(
+                    r == 1 and c == 1 and v == 9 for r, c, v in a.entries
+                ),
+            ),
+            Challenge(
+                "sp_5", "Al menos 5 no-ceros",
+                "Insertá hasta 5 entradas.", "Insert en celdas vacías",
+                lambda a: len(a.entries) >= 5,
+            ),
         ])
 
     def reset(self) -> None:
@@ -58,6 +82,19 @@ class SparseMatrixAnimation(BaseAnimation):
             if (r, c) not in occupied
         ]
         return random.choice(empty) if empty else None
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id != "traverse" or not self.entries:
+            return []
+        return [
+            AnimStep(
+                f"COO [{i + 1}/{len(self.entries)}]: ({r},{c},{v})",
+                note=f"({r},{c})",
+            )
+            for i, (r, c, v) in enumerate(self.entries)
+        ]
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id == "insert":
@@ -100,13 +137,23 @@ class SparseMatrixAnimation(BaseAnimation):
 
         if self.interactive:
             highlight = self._highlight_cell
-            if self.live_op == "traverse":
+            if self.step_mode and self.steps:
+                note = self.steps[self.step_index].note
+                if note.startswith("(") and "," in note:
+                    try:
+                        parts = note.strip("()").split(",")
+                        highlight = (int(parts[0]), int(parts[1]))
+                    except ValueError:
+                        pass
+            elif self.live_op == "traverse":
                 n = len(self.entries)
                 if n > 0:
                     idx = min(int(self.live_progress() * n), n - 1)
                     r, c, _ = self.entries[idx]
                     highlight = (r, c)
-            self._draw_grid(surface, rect, self.entries, highlight=highlight)
+            self._draw_grid(
+                surface, rect, self.entries, highlight=highlight, register=True,
+            )
             return
 
         if self.action_index == 0:
@@ -134,6 +181,7 @@ class SparseMatrixAnimation(BaseAnimation):
         entries: list[tuple[int, int, int]],
         highlight: tuple[int, int] | None = None,
         dim_zeros: bool = True,
+        register: bool = False,
     ) -> None:
         cell = min(48, (rect.width - 200) // self.cols, (rect.height - 80) // self.rows)
         cell = max(cell, 28)
@@ -166,6 +214,11 @@ class SparseMatrixAnimation(BaseAnimation):
                 pygame.draw.rect(surface, border, box, width=2, border_radius=3)
                 vs = self._font.render(str(val), True, fg)
                 surface.blit(vs, vs.get_rect(center=box.center))
+                if register:
+                    self.register_hit(
+                        f"cell:{r},{c}", box, label=f"({r},{c})",
+                        row=r, col=c, value=val,
+                    )
 
         list_x = start_x + grid_w + 24
         list_y = start_y

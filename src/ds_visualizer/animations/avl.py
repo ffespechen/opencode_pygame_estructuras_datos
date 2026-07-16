@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import BaseAnimation, Challenge, Operation
 
 
 class AvlAnimation(BaseAnimation):
@@ -24,10 +24,24 @@ class AvlAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Insert", "insert",
                 prompt="Valor:", example="30",
+                complexity="O(log n)",
             ),
             Operation(
                 pygame.K_2, "Delete", "delete",
                 prompt="Valor a eliminar:", example="40",
+                complexity="O(log n)", uses_selection=True,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "avl_30", "Contiene 30",
+                "Insertá 30.", "Insert → 30",
+                lambda a: 30 in a.values,
+            ),
+            Challenge(
+                "avl_4", "Al menos 5 nodos",
+                "Llegá a 5 valores.", "Insertá dos veces más",
+                lambda a: len(a.values) >= 5,
             ),
         ])
 
@@ -92,8 +106,12 @@ class AvlAnimation(BaseAnimation):
             x = start_x + i * spacing
             highlight = i == self._highlight_idx
             self._node(surface, x, y, str(val), highlight=highlight)
+            hit = pygame.Rect(x - 22, y - 22, 44, 44)
+            self.register_hit(
+                f"idx:{i}", hit, label=str(val), value=val, index=i,
+            )
 
-        self._hint(surface, rect, "AVL interactivo (inserción)")
+        self._hint(surface, rect, "AVL interactivo — click + Delete")
 
     def _node(
         self,

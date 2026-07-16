@@ -4,7 +4,7 @@ import copy
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import AnimStep, BaseAnimation, Challenge, Operation
 
 
 BUCKET_COUNT = 7
@@ -36,14 +36,29 @@ class HashSetAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Add", "add",
                 prompt="Valor:", example="Zoe",
+                complexity="O(1) avg",
             ),
             Operation(
                 pygame.K_2, "Contains", "contains",
                 prompt="Valor:", example="Ana",
+                complexity="O(1) avg", mutates=False, uses_selection=True,
             ),
             Operation(
                 pygame.K_3, "Remove", "remove",
                 prompt="Valor:", example="Leo",
+                complexity="O(1) avg", uses_selection=True,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "hs_zoe", "Agregar Zoe",
+                "Add Zoe al conjunto.", "Add → Zoe",
+                lambda a: any("Zoe" in b for b in a._buckets),
+            ),
+            Challenge(
+                "hs_no_leo", "Sin Leo",
+                "Remove Leo.", "Click Leo + Remove",
+                lambda a: all("Leo" not in b for b in a._buckets),
             ),
         ])
 
@@ -100,6 +115,18 @@ class HashSetAnimation(BaseAnimation):
             return f"Remove('{val}'): no está en el conjunto"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "contains" and user_input:
+            val = self.parse_token(user_input) or ""
+            idx = self._hash_fn(val)
+            return [
+                AnimStep(f"hash('{val}') → bucket {idx}"),
+                AnimStep(f"Contains('{val}')?"),
+            ]
+        return []
+
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
@@ -120,6 +147,7 @@ class HashSetAnimation(BaseAnimation):
                 surface, rect, self._buckets,
                 highlight_bucket=self._highlight_bucket,
                 highlight_val=self._highlight_val,
+                register=True,
             )
             return
 
@@ -144,6 +172,7 @@ class HashSetAnimation(BaseAnimation):
         highlight_bucket: int = -1,
         highlight_val: str = "",
         result_label: str = "",
+        register: bool = False,
     ) -> None:
         n = len(buckets)
         bw = min(90, (rect.width - 60) // n - 8)
@@ -184,6 +213,10 @@ class HashSetAnimation(BaseAnimation):
                 )
                 vs = self._font.render(val, True, fg)
                 surface.blit(vs, vs.get_rect(center=cell.center))
+                if register:
+                    self.register_hit(
+                        f"val:{val}", cell, label=val, key=val, value=val, bucket=i,
+                    )
 
         if result_label:
             lbl = self._font.render(result_label, True, config.SUBTEXT_COLOR)

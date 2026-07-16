@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class StackLinkedListAnimation(BaseAnimation):
@@ -22,11 +27,33 @@ class StackLinkedListAnimation(BaseAnimation):
         self.set_operations([
             Operation(
                 pygame.K_1, "Push", "push",
-                prompt="Valor a apilar:",
-                example="99",
+                prompt="Valor a apilar:", example="99",
+                complexity="O(1)",
             ),
-            Operation(pygame.K_2, "Peek", "peek"),
-            Operation(pygame.K_3, "Pop", "pop"),
+            Operation(
+                pygame.K_2, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+            Operation(
+                pygame.K_3, "Pop", "pop",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "sll_empty",
+                "Vaciar la pila",
+                "Hacé Pop hasta dejarla vacía.",
+                "Pop elimina HEAD (TOP).",
+                lambda a: len(a.values) == 0,
+            ),
+            Challenge(
+                "sll_top_1",
+                "TOP = 1",
+                "Dejá el valor 1 en HEAD.",
+                "Push 1 (queda en HEAD).",
+                lambda a: bool(a.values) and a.values[0] == 1,
+            ),
         ])
 
     def reset(self) -> None:
@@ -56,6 +83,17 @@ class StackLinkedListAnimation(BaseAnimation):
             return f"Pop {removed}"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "peek" and self.values:
+            return [
+                AnimStep("Mirar HEAD = TOP", highlight_idx=0, note="O(1)"),
+            ]
+        if op_id == "pop":
+            return [AnimStep("Remover HEAD", note="O(1)")]
+        return []
+
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
@@ -82,7 +120,9 @@ class StackLinkedListAnimation(BaseAnimation):
         highlight = 0 if self.live_op in ("peek", "push", "pop") else self.highlight_idx
         if highlight < 0 and self.values:
             highlight = 0
-        self._draw_nodes(surface, rect, self.values, highlight_idx=highlight)
+        self._draw_nodes(
+            surface, rect, self.values, highlight_idx=highlight, register=True,
+        )
 
     def _draw_nodes(
         self,
@@ -92,6 +132,7 @@ class StackLinkedListAnimation(BaseAnimation):
         highlight_idx: int = -1,
         fade_idx: int = -1,
         fade_alpha: int = 255,
+        register: bool = False,
     ) -> None:
         n = len(values)
         if n == 0:
@@ -124,6 +165,13 @@ class StackLinkedListAnimation(BaseAnimation):
             val_rect = val_surf.get_rect(center=temp.get_rect().center)
             temp.blit(val_surf, val_rect)
             surface.blit(temp, node_rect)
+
+            if register and alpha > 200:
+                self.register_hit(
+                    f"idx:{i}", node_rect,
+                    label=f"[{i}]={val}" + (" TOP" if i == 0 else ""),
+                    index=i, value=val,
+                )
 
             if i < n - 1:
                 arrow_start = (nx + node_w + 2, base_y + node_h // 2)

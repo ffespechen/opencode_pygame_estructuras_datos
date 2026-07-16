@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 _WORD_CYCLE = ["CAT", "CAR", "CAB", "DOG", "DOT"]
@@ -27,14 +32,29 @@ class TrieAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Insert", "insert",
                 prompt="Palabra:", example="DOG",
+                complexity="O(L)",
             ),
             Operation(
                 pygame.K_2, "Search", "search",
                 prompt="Prefijo o palabra:", example="CA",
+                complexity="O(L)", mutates=False,
             ),
             Operation(
                 pygame.K_3, "Delete", "delete",
                 prompt="Palabra:", example="CAT",
+                complexity="O(L)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "trie_dog", "Insertar DOG",
+                "Insertá la palabra DOG.", "Insert → DOG",
+                lambda a: "DOG" in a.words,
+            ),
+            Challenge(
+                "trie_no_cat", "Sin CAT",
+                "Eliminá CAT del trie.", "Delete → CAT",
+                lambda a: "CAT" not in a.words,
             ),
         ])
 
@@ -43,6 +63,26 @@ class TrieAnimation(BaseAnimation):
         self.words = set(self._initial_words)
         self._word_idx = 0
         self._highlighted = set()
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id != "search":
+            return []
+        prefix = (user_input or "").strip().upper()
+        if not prefix:
+            return []
+        steps = []
+        path = {"ROOT"}
+        steps.append(AnimStep("Desde ROOT", highlight_ids=frozenset(path)))
+        for ch in prefix:
+            path.add(ch)
+            steps.append(AnimStep(
+                f"Seguir '{ch}'",
+                highlight_ids=frozenset(path),
+                note=ch,
+            ))
+        return steps
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id == "insert":
@@ -253,6 +293,12 @@ class TrieAnimation(BaseAnimation):
                 highlight=name in highlighted,
                 end_mark=name in ends,
                 radius=18 if name == "ROOT" else 20,
+            )
+            x, y = pos[name]
+            r = 18 if name == "ROOT" else 20
+            hit = pygame.Rect(x - r, y - r, r * 2, r * 2)
+            self.register_hit(
+                f"trie:{name}", hit, label=name, value=name, key=name,
             )
         if words_label:
             lbl = self._font.render(words_label, True, config.SUBTEXT_COLOR)

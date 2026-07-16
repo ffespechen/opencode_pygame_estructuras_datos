@@ -4,7 +4,7 @@ import copy
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import AnimStep, BaseAnimation, Challenge, Operation
 
 
 class UnionFindAnimation(BaseAnimation):
@@ -29,10 +29,19 @@ class UnionFindAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Find", "find",
                 prompt="Elemento:", example="C",
+                complexity="O(α(n))", mutates=False, uses_selection=True,
             ),
             Operation(
                 pygame.K_2, "Union", "union",
                 prompt="Par de elementos:", example="A D",
+                complexity="O(α(n))",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "uf_ad", "Unir A y D",
+                "Union A D (misma raíz).", "Union → A D",
+                lambda a: a._find_root("A") == a._find_root("D"),
             ),
         ])
 
@@ -58,6 +67,26 @@ class UnionFindAnimation(BaseAnimation):
 
     def _roots(self) -> set[str]:
         return {e for e in self.elements if self.parent[e] == e}
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id != "find":
+            return []
+        elem = (user_input or self._find_element or "C").strip().upper()
+        if elem not in self.elements:
+            return []
+        path = self._find_path(elem)
+        steps = []
+        seen: set[str] = set()
+        for e in path:
+            seen.add(e)
+            steps.append(AnimStep(
+                f"Find: visitar {e}",
+                highlight_ids=frozenset(seen),
+                note=e,
+            ))
+        return steps
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id == "find":
@@ -208,6 +237,11 @@ class UnionFindAnimation(BaseAnimation):
                 name,
                 highlight=name in highlighted,
                 is_root=name in roots,
+            )
+            x, y = pos[name]
+            hit = pygame.Rect(x - 22, y - 22, 44, 44)
+            self.register_hit(
+                f"el:{name}", hit, label=name, value=name, key=name,
             )
 
     def _draw_find(self, surface: pygame.Surface, rect: pygame.Rect) -> None:

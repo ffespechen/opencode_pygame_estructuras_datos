@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class DequeAnimation(BaseAnimation):
@@ -22,16 +27,38 @@ class DequeAnimation(BaseAnimation):
         self.set_operations([
             Operation(
                 pygame.K_1, "Push front", "push_front",
-                prompt="Valor:",
-                example="99",
+                prompt="Valor:", example="99",
+                complexity="O(1)",
             ),
             Operation(
                 pygame.K_2, "Push rear", "push_rear",
-                prompt="Valor:",
-                example="99",
+                prompt="Valor:", example="99",
+                complexity="O(1)",
             ),
-            Operation(pygame.K_3, "Pop front", "pop_front"),
-            Operation(pygame.K_4, "Pop rear", "pop_rear"),
+            Operation(
+                pygame.K_3, "Pop front", "pop_front",
+                complexity="O(1)",
+            ),
+            Operation(
+                pygame.K_4, "Pop rear", "pop_rear",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "deque_empty",
+                "Vaciar la deque",
+                "Pop front/rear hasta vaciarla.",
+                "Podés sacar de ambos extremos.",
+                lambda a: len(a.values) == 0,
+            ),
+            Challenge(
+                "deque_front_99",
+                "FRONT = 99",
+                "Dejá 99 al frente.",
+                "Push front → 99.",
+                lambda a: bool(a.values) and a.values[0] == 99,
+            ),
         ])
 
     def reset(self) -> None:
@@ -69,6 +96,15 @@ class DequeAnimation(BaseAnimation):
             return f"Pop rear {removed}"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "pop_front" and self.values is not None:
+            return [AnimStep("Quitar FRONT", highlight_idx=0, note="O(1)")]
+        if op_id == "pop_rear":
+            return [AnimStep("Quitar REAR", note="O(1)")]
+        return []
+
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
@@ -103,6 +139,7 @@ class DequeAnimation(BaseAnimation):
             surface, rect, self.values,
             highlight_front=highlight_front,
             highlight_rear=highlight_rear,
+            register=True,
         )
 
     def _draw_boxes(
@@ -114,6 +151,7 @@ class DequeAnimation(BaseAnimation):
         highlight_rear: bool = False,
         fade_idx: int = -1,
         fade_alpha: int = 255,
+        register: bool = False,
     ) -> None:
         box_w, box_h = 64, 44
         gap = 10
@@ -151,6 +189,12 @@ class DequeAnimation(BaseAnimation):
             val_rect = val_surf.get_rect(center=temp.get_rect().center)
             temp.blit(val_surf, val_rect)
             surface.blit(temp, box_rect)
+
+            if register and alpha > 200:
+                self.register_hit(
+                    f"idx:{i}", box_rect, label=f"[{i}]={val}",
+                    index=i, value=val,
+                )
 
         front_surf = self._font.render("FRONT", True, config.HIGHLIGHT_COLOR)
         frect = front_surf.get_rect(midtop=(start_x + box_w // 2, base_y - 22))

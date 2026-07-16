@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class PriorityQueueAnimation(BaseAnimation):
@@ -12,7 +17,6 @@ class PriorityQueueAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        # (prioridad, valor) — menor número = mayor prioridad
         self.base: list[tuple[int, str]] = [
             (1, "URG"),
             (3, "JOB"),
@@ -31,22 +35,39 @@ class PriorityQueueAnimation(BaseAnimation):
         self.set_operations([
             Operation(
                 pygame.K_1, "Enqueue", "enqueue",
-                prompt="Prioridad y etiqueta:",
-                example="2 NET",
+                prompt="Prioridad y etiqueta:", example="2 NET",
+                complexity="O(n)",
             ),
-            Operation(pygame.K_2, "Peek", "peek"),
-            Operation(pygame.K_3, "Dequeue", "dequeue"),
+            Operation(
+                pygame.K_2, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+            Operation(
+                pygame.K_3, "Dequeue", "dequeue",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "pq_empty",
+                "Vaciar la cola",
+                "Dequeue hasta vaciarla.",
+                "Siempre sale el de menor prio (FRONT).",
+                lambda a: len(a.items) == 0,
+            ),
+            Challenge(
+                "pq_front_0",
+                "FRONT prio = 0",
+                "Enqueue algo con prioridad 0.",
+                "Enqueue: 0 TOP",
+                lambda a: bool(a.items) and a.items[0][0] == 0,
+            ),
         ])
 
     def reset(self) -> None:
         super().reset()
         self.items = list(self._initial)
         self._label_idx = 0
-
-    def _next_label(self) -> str:
-        label = self._LABELS[self._label_idx % len(self._LABELS)]
-        self._label_idx += 1
-        return label
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id == "enqueue":
@@ -75,6 +96,22 @@ class PriorityQueueAnimation(BaseAnimation):
             return f"Dequeue (p={prio}, {label})"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "peek" and self.items:
+            prio, label = self.items[0]
+            return [
+                AnimStep(
+                    f"FRONT = (p={prio}, {label})",
+                    highlight_idx=0,
+                    note="O(1)",
+                ),
+            ]
+        if op_id == "dequeue":
+            return [AnimStep("Extraer FRONT", highlight_idx=0, note="O(1)")]
+        return []
+
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
@@ -100,11 +137,13 @@ class PriorityQueueAnimation(BaseAnimation):
             self.draw_empty(surface, rect, "(cola vacía)")
             return
         highlight = self.highlight_idx
-        if self.live_op == "peek" or self.live_op == "dequeue":
+        if self.live_op in ("peek", "dequeue"):
             highlight = 0
         elif self.live_op == "enqueue" and self.highlight_idx >= 0:
             highlight = self.highlight_idx
-        self._draw_items(surface, rect, self.items, highlight_idx=highlight)
+        self._draw_items(
+            surface, rect, self.items, highlight_idx=highlight, register=True,
+        )
         self._hint(surface, rect, "Menor prio = más urgente (FRONT)")
 
     def _hint(self, surface: pygame.Surface, rect: pygame.Rect, text: str) -> None:
@@ -119,6 +158,7 @@ class PriorityQueueAnimation(BaseAnimation):
         highlight_idx: int = -1,
         fade_idx: int = -1,
         fade_alpha: int = 255,
+        register: bool = False,
     ) -> None:
         n = len(items)
         if n == 0:
@@ -155,6 +195,13 @@ class PriorityQueueAnimation(BaseAnimation):
             temp.blit(p_surf, p_surf.get_rect(midtop=(box_w // 2, 6)))
             temp.blit(v_surf, v_surf.get_rect(midbottom=(box_w // 2, box_h - 6)))
             surface.blit(temp, (bx, base_y))
+
+            if register and alpha > 200:
+                cell = pygame.Rect(bx, base_y, box_w, box_h)
+                self.register_hit(
+                    f"idx:{i}", cell, label=f"p={prio} {val}",
+                    index=i, value=prio, key=val,
+                )
 
         if n > 0:
             front = self._font.render("FRONT", True, config.HIGHLIGHT_COLOR)

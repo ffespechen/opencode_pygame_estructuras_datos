@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class DoublyLinkedListAnimation(BaseAnimation):
@@ -19,17 +24,39 @@ class DoublyLinkedListAnimation(BaseAnimation):
             ("Eliminación de nodo (valor=73)", 5.0),
         ]
         self.set_operations([
-            Operation(pygame.K_1, "Forward", "forward"),
-            Operation(pygame.K_2, "Backward", "backward"),
+            Operation(
+                pygame.K_1, "Forward", "forward",
+                complexity="O(n)", mutates=False,
+            ),
+            Operation(
+                pygame.K_2, "Backward", "backward",
+                complexity="O(n)", mutates=False,
+            ),
             Operation(
                 pygame.K_3, "Insert mid", "insert_middle",
-                prompt="Valor:",
-                example="99",
+                prompt="Valor:", example="99",
+                complexity="O(n)",
             ),
             Operation(
                 pygame.K_4, "Delete", "delete",
-                prompt="Valor a eliminar:",
-                example="73",
+                prompt="Valor a eliminar:", example="73",
+                complexity="O(n)", uses_selection=True,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "dll_head_0",
+                "HEAD = 0",
+                "Hacé que el primer nodo valga 0.",
+                "Insert mid o borrá e insertá hasta que HEAD sea 0.",
+                lambda a: bool(a.values) and a.values[0] == 0,
+            ),
+            Challenge(
+                "dll_len_3",
+                "Solo 3 nodos",
+                "Dejá la lista con exactamente 3 nodos.",
+                "Usá Delete (click + 4) hasta quedar con 3.",
+                lambda a: len(a.values) == 3,
             ),
         ])
 
@@ -70,6 +97,25 @@ class DoublyLinkedListAnimation(BaseAnimation):
             return f"Delete {v}"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "forward" and self.values:
+            return [
+                AnimStep(f"Adelante → nodo {i} = {v}", highlight_idx=i)
+                for i, v in enumerate(self.values)
+            ]
+        if op_id == "backward" and self.values:
+            n = len(self.values)
+            return [
+                AnimStep(
+                    f"Atrás → nodo {i} = {self.values[i]}",
+                    highlight_idx=i,
+                )
+                for i in range(n - 1, -1, -1)
+            ]
+        return []
+
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
             self._init_font()
@@ -93,15 +139,17 @@ class DoublyLinkedListAnimation(BaseAnimation):
         highlight = self.highlight_idx
         n = len(self.values)
 
-        if self.live_op == "forward" and n > 0:
+        if self.live_op == "forward" and n > 0 and not self.step_mode:
             highlight = min(int(self.live_progress() * n), n - 1)
-        elif self.live_op == "backward" and n > 0:
+        elif self.live_op == "backward" and n > 0 and not self.step_mode:
             highlight = max(n - 1 - int(self.live_progress() * n), 0)
 
         if not self.values:
             self.draw_empty(surface, rect, "(lista vacía)")
             return
-        self._draw_nodes(surface, rect, self.values, highlight_idx=highlight)
+        self._draw_nodes(
+            surface, rect, self.values, highlight_idx=highlight, register=True,
+        )
 
     def _draw_nodes(
         self,
@@ -110,6 +158,7 @@ class DoublyLinkedListAnimation(BaseAnimation):
         values: list[int],
         highlight_idx: int = -1,
         show_labels: bool = True,
+        register: bool = False,
     ) -> None:
         n = len(values)
         node_w, node_h = 70, 44
@@ -137,8 +186,13 @@ class DoublyLinkedListAnimation(BaseAnimation):
             val_rect = val_surf.get_rect(center=node_rect.center)
             surface.blit(val_surf, val_rect)
 
+            if register and val >= 0:
+                self.register_hit(
+                    f"idx:{i}", node_rect, label=f"[{i}]={val}",
+                    index=i, value=val,
+                )
+
             if i < n - 1:
-                # Flecha hacia adelante (arriba del centro)
                 fwd_y = base_y + node_h // 2 - 8
                 arrow_start = (nx + node_w + 2, fwd_y)
                 arrow_end = (nx + node_w + gap - 2, fwd_y)
@@ -150,7 +204,6 @@ class DoublyLinkedListAnimation(BaseAnimation):
                 tip_r = (arrow_end[0] - 6, arrow_end[1] + 4)
                 pygame.draw.polygon(surface, arrow_color, [arrow_end, tip_l, tip_r])
 
-                # Flecha hacia atrás (abajo del centro)
                 back_y = base_y + node_h // 2 + 8
                 back_start = (nx + node_w + gap - 2, back_y)
                 back_end = (nx + node_w + 2, back_y)

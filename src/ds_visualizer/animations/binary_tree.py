@@ -2,7 +2,7 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import AnimStep, BaseAnimation, Challenge, Operation
 
 
 class BinaryTreeAnimation(BaseAnimation):
@@ -31,18 +31,58 @@ class BinaryTreeAnimation(BaseAnimation):
             ("Inserción en BST (valor=55)", 5.0),
         ]
         self.set_operations([
-            Operation(pygame.K_1, "Preorder", "preorder"),
-            Operation(pygame.K_2, "Inorder", "inorder"),
-            Operation(pygame.K_3, "Postorder", "postorder"),
+            Operation(
+                pygame.K_1, "Preorder", "preorder",
+                complexity="O(n)", mutates=False,
+            ),
+            Operation(
+                pygame.K_2, "Inorder", "inorder",
+                complexity="O(n)", mutates=False,
+            ),
+            Operation(
+                pygame.K_3, "Postorder", "postorder",
+                complexity="O(n)", mutates=False,
+            ),
             Operation(
                 pygame.K_4, "Insert", "insert",
                 prompt="Valor a insertar:", example="55",
+                complexity="O(h)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "bst_55", "Insertar 55",
+                "Insertá 55 en el BST.", "Insert → 55",
+                lambda a: 55 in a.bst_values,
+            ),
+            Challenge(
+                "bst_size", "Al menos 9 nodos",
+                "Insertá valores hasta tener 9 o más.", "Insert varias veces",
+                lambda a: len(a.bst_values) >= 9,
             ),
         ])
 
     def reset(self) -> None:
         super().reset()
         self.bst_values = list(self._initial_bst)
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id not in ("preorder", "inorder", "postorder"):
+            return []
+        nodes = self._build_nodes_from_values(self.bst_values)
+        order = self._traversal_order(nodes, op_id)
+        steps = []
+        seen: set[int] = set()
+        for nid in order:
+            seen.add(nid)
+            steps.append(AnimStep(
+                f"{op_id}: {nodes[nid]['v']}",
+                highlight_set=frozenset(seen),
+                note=str(nodes[nid]["v"]),
+            ))
+        return steps
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id in ("preorder", "inorder", "postorder"):
@@ -182,8 +222,10 @@ class BinaryTreeAnimation(BaseAnimation):
             return
         positions = self._compute_positions_dynamic(nodes, rect)
 
-        highlighted: set[int] = set()
-        if self.live_op in ("preorder", "inorder", "postorder"):
+        highlighted: set[int] = set(self.highlight_set)
+        if self.step_mode and self.highlight_set:
+            highlighted = set(self.highlight_set)
+        elif self.live_op in ("preorder", "inorder", "postorder"):
             order = self._traversal_order(nodes, self.live_op)
             count = int(self.live_progress() * (len(order) + 1))
             highlighted = set(order[:count])
@@ -241,6 +283,10 @@ class BinaryTreeAnimation(BaseAnimation):
             val = nodes[nid]["v"]
             val_surf = self._font.render(str(val), True, fg)
             surface.blit(val_surf, val_surf.get_rect(center=(x, y)))
+            hit = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
+            self.register_hit(
+                f"node:{nid}", hit, label=str(val), value=val, index=nid,
+            )
 
     def _compute_positions(self, rect: pygame.Rect) -> dict[int, tuple[int, int]]:
         levels = {0: 0, 1: 1, 2: 1, 3: 2, 4: 2, 5: 2, 6: 2}

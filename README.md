@@ -44,11 +44,11 @@ python -m ds_visualizer.main
   - **Modo demo** (por defecto): cada estructura cicla acciones animadas (~5 s cada una)
   - **Modo interactivo** (`I`): operaciones por teclado, toolbar, click y drag; el estado persiste hasta `R` (reset)
   - Las operaciones que necesitan datos **piden entrada** (valor, clave, par de vértices, etc.): escribí y confirmá con `Enter` (cancelar con `Esc`)
-  - **Click** en nodos/celdas para seleccionar; la selección alimenta Search/Delete/BFS/DFS
-  - **Stepper** (`Space` / `←` `→`): recorre algoritmos paso a paso (traverse, search, BFS/DFS, bubble del heap)
-  - **Undo** (`U`) y badge de **complejidad** (`O(1)`, `O(n)`, …) tras cada operación
+  - **Click** en nodos/celdas para seleccionar (todas las estructuras)
+  - **Stepper** (`Space` / `←` `→`): recorre algoritmos paso a paso cuando aplica (traverse, search, BFS/DFS, etc.)
+  - **Undo** (`U`) y badge de **complejidad** tras cada operación
   - **Toolbar** de botones (ops + Undo / Reset / Reto / Hint) sobre la barra de atajos
-  - **Drag & drop** (array swap, aristas en grafo) y **retos** (`C`) con hint (`H`)
+  - **Drag & drop** donde aplica (p. ej. swap en array, aristas en grafo) y **retos** (`C`) con hint (`H`) en todas las estructuras
 - **Panel inferior (55%)**: información teórica de la estructura cargada desde archivos `.md` individuales
   - Renderiza títulos, encabezados, listas con viñetas, bloques de código con fondo y texto normal con ajuste de línea
   - Desplazamiento vertical con flechas ↑↓ o rueda del ratón

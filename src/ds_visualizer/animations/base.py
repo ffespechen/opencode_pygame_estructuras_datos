@@ -150,6 +150,11 @@ class BaseAnimation:
         "triplets", "nodes", "children", "entries", "items",
         "set_data", "queue", "prio_items", "word", "inserted",
         "extra_vertex", "extra_edge", "buckets", "keys", "data",
+        "_buckets", "bst_values", "words", "_key_counter",
+        "_highlight_bucket", "_highlight_key", "_highlight_cell",
+        "_highlight_val", "_word_idx", "_find_element", "_union_pair",
+        "_highlight_edges", "_label_idx", "_name_idx", "_val_counter",
+        "_last_inserted", "_highlight_idx",
     )
 
     # --- estado / undo ---------------------------------------------------
@@ -248,31 +253,50 @@ class BaseAnimation:
         """Deriva texto de prompt desde la selección actual."""
         if not op.uses_selection or not self.selected_id:
             return None
-        meta_index = None
+
+        target = None
         for t in self._hit_targets:
-            if t.target_id == self.selected_id and "index" in t.meta:
-                meta_index = t.meta["index"]
+            if t.target_id == self.selected_id:
+                target = t
                 break
-        if meta_index is not None and op.op_id in (
-            "delete", "search", "peek",
-        ):
-            if op.op_id == "delete":
-                return str(meta_index)
+
+        if target is not None:
+            meta = target.meta
+            # Sparse matrix: fila col
+            if "row" in meta and "col" in meta and op.op_id in (
+                "search", "insert", "delete",
+            ):
+                return f"{meta['row']} {meta['col']}"
+            # Hash map / set: clave o valor
+            if "key" in meta and op.op_id in ("get", "remove", "contains", "search"):
+                return str(meta["key"])
+            # Delete/search por valor (listas) vs por índice (array)
+            if "index" in meta and op.op_id == "delete":
+                prompt = (op.prompt or "").lower()
+                if "índice" in prompt or "indice" in prompt:
+                    return str(meta["index"])
+            if "value" in meta and op.op_id in (
+                "delete", "search", "contains", "remove", "find",
+            ):
+                return str(meta["value"])
+            if "label" in meta and op.op_id in ("find", "bfs", "dfs", "add_edge"):
+                return str(meta["label"])
+
         if self.selected_label:
-            # Etiqueta tipo "A" o "[2]=88" → token usable
             label = self.selected_label
             if "=" in label and label.startswith("["):
-                # [2]=88 → para search usar 88, para delete usar 2
                 try:
                     idx_part, val_part = label.split("=", 1)
                     idx = idx_part.strip("[]")
                     if op.op_id == "delete":
-                        return idx
+                        prompt = (op.prompt or "").lower()
+                        if "índice" in prompt or "indice" in prompt:
+                            return idx
+                        return val_part.strip()
                     if op.op_id == "search":
                         return val_part.strip()
                 except ValueError:
                     pass
-            # Grafo / nodos con letra
             token = label.split()[0].strip("[]→")
             if token:
                 return token

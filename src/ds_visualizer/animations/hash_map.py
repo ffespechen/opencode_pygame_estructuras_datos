@@ -4,7 +4,7 @@ import copy
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import AnimStep, BaseAnimation, Challenge, Operation
 
 
 BUCKET_COUNT = 7
@@ -40,14 +40,33 @@ class HashmapAnimation(BaseAnimation):
             Operation(
                 pygame.K_1, "Put", "put",
                 prompt="Clave y valor:", example="Zoe 99",
+                complexity="O(1) avg",
             ),
             Operation(
                 pygame.K_2, "Get", "get",
                 prompt="Clave:", example="Ana",
+                complexity="O(1) avg", mutates=False, uses_selection=True,
             ),
             Operation(
                 pygame.K_3, "Remove", "remove",
                 prompt="Clave:", example="Reno",
+                complexity="O(1) avg", uses_selection=True,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "hm_zoe",
+                "Insertar Zoe",
+                "Hacé Put de Zoe con cualquier valor.",
+                "Put → Zoe 42",
+                lambda a: any(k == "Zoe" for b in a._buckets for k, _ in b),
+            ),
+            Challenge(
+                "hm_no_reno",
+                "Sin Reno",
+                "Eliminá la clave Reno.",
+                "Click Reno + Remove, o Remove Reno",
+                lambda a: all(k != "Reno" for b in a._buckets for k, _ in b),
             ),
         ])
 
@@ -104,6 +123,18 @@ class HashmapAnimation(BaseAnimation):
             return f"Remove('{key}'): clave no encontrada"
         return ""
 
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "get" and user_input:
+            key = self.parse_token(user_input) or ""
+            idx = self._hash_fn(key)
+            return [
+                AnimStep(f"hash('{key}') → bucket {idx}", note=f"bucket {idx}"),
+                AnimStep(f"Buscar '{key}' en bucket", note="O(1) avg"),
+            ]
+        return []
+
     def update(self, dt: float) -> None:
         super().update(dt)
 
@@ -119,6 +150,7 @@ class HashmapAnimation(BaseAnimation):
                 surface, rect, self._buckets,
                 highlight_bucket=self._highlight_bucket,
                 highlight_key=self._highlight_key,
+                register=True,
             )
             return
 
@@ -151,6 +183,7 @@ class HashmapAnimation(BaseAnimation):
         buckets: list[list[tuple[str, int]]],
         highlight_bucket: int = -1,
         highlight_key: str = "",
+        register: bool = False,
     ) -> None:
         n = len(buckets)
         bw = min(90, (rect.width - 60) // n - 8)
@@ -191,6 +224,11 @@ class HashmapAnimation(BaseAnimation):
                                       box_rect.bottom - 16))
                     break
                 surface.blit(ts, (box_rect.x + 4, entry_y))
+                if register:
+                    cell = pygame.Rect(box_rect.x + 2, entry_y, bw - 4, 14)
+                    self.register_hit(
+                        f"key:{k}", cell, label=k, key=k, bucket=i, value=v,
+                    )
 
     def _draw_insert_collision(self, surface: pygame.Surface,
                                 rect: pygame.Rect) -> None:

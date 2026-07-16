@@ -2,7 +2,12 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation, Operation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    Operation,
+)
 
 
 class QueueLinkedListAnimation(BaseAnimation):
@@ -22,11 +27,33 @@ class QueueLinkedListAnimation(BaseAnimation):
         self.set_operations([
             Operation(
                 pygame.K_1, "Enqueue", "enqueue",
-                prompt="Valor a encolar:",
-                example="88",
+                prompt="Valor a encolar:", example="88",
+                complexity="O(1)",
             ),
-            Operation(pygame.K_2, "Peek", "peek"),
-            Operation(pygame.K_3, "Dequeue", "dequeue"),
+            Operation(
+                pygame.K_2, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+            Operation(
+                pygame.K_3, "Dequeue", "dequeue",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "qll_empty",
+                "Vaciar la cola",
+                "Dequeue hasta dejarla vacía.",
+                "Dequeue saca FRONT=HEAD.",
+                lambda a: len(a.values) == 0,
+            ),
+            Challenge(
+                "qll_front_7",
+                "FRONT = 7",
+                "Dejá el valor 7 al frente.",
+                "Enqueue 7 y dequeue lo demás, o dequeue hasta 7.",
+                lambda a: bool(a.values) and a.values[0] == 7,
+            ),
         ])
 
     def reset(self) -> None:
@@ -55,6 +82,17 @@ class QueueLinkedListAnimation(BaseAnimation):
             self.highlight_idx = 0 if self.values else -1
             return f"Dequeue {removed}"
         return ""
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "peek" and self.values:
+            return [
+                AnimStep("Mirar FRONT=HEAD", highlight_idx=0, note="O(1)"),
+            ]
+        if op_id == "dequeue":
+            return [AnimStep("Remover HEAD", note="O(1)")]
+        return []
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         if self._font is None:
@@ -92,6 +130,7 @@ class QueueLinkedListAnimation(BaseAnimation):
             surface, rect, self.values,
             highlight_front=highlight_front,
             highlight_rear=highlight_rear,
+            register=True,
         )
 
     def _draw_nodes(
@@ -103,6 +142,7 @@ class QueueLinkedListAnimation(BaseAnimation):
         highlight_rear: bool = False,
         fade_idx: int = -1,
         fade_alpha: int = 255,
+        register: bool = False,
     ) -> None:
         n = len(values)
         if n == 0:
@@ -138,6 +178,12 @@ class QueueLinkedListAnimation(BaseAnimation):
             val_rect = val_surf.get_rect(center=temp.get_rect().center)
             temp.blit(val_surf, val_rect)
             surface.blit(temp, node_rect)
+
+            if register and alpha > 200:
+                self.register_hit(
+                    f"idx:{i}", node_rect, label=f"[{i}]={val}",
+                    index=i, value=val,
+                )
 
             if i < n - 1:
                 arrow_start = (nx + node_w + 2, base_y + node_h // 2)
