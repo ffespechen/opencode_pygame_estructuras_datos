@@ -202,7 +202,7 @@ class VisualizationState:
         )
         shortcuts = (
             f"ESC: Menú  |  I: {mode_hint}  |  Click: sel  |  "
-            "Space: paso  |  U: undo  |  C: reto  |  Drag: soltar  |  Ctrl+Q"
+            "Space: paso  |  P: auto  |  U: undo  |  C: reto  |  Ctrl+Q"
         )
         self.shortcuts_bar.draw(
             screen, width, height, shortcuts, current_action,

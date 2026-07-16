@@ -121,13 +121,14 @@ class HeapAnimation(BaseAnimation):
             ordered = sorted(self._highlight_indices)
             steps: list[AnimStep] = []
             seen: list[int] = []
-            for idx in ordered:
+            for i, idx in enumerate(ordered):
                 seen.append(idx)
                 val = self.heap[idx] if idx < len(self.heap) else "?"
                 steps.append(AnimStep(
                     f"Bubble en índice {idx} (val={val})",
                     highlight_set=frozenset(seen),
-                    note="O(log n)",
+                    current_idx=idx,
+                    note=f"{i + 1}/{len(ordered)} · Space=siguiente",
                 ))
             return steps
         return []
@@ -162,17 +163,26 @@ class HeapAnimation(BaseAnimation):
         if n == 0:
             return
         highlighted = set(self._highlight_indices)
-        if self.step_mode and self.highlight_set:
+        current: int | None = None
+        if self.step_mode:
             highlighted = set(self.highlight_set)
+            current = self.focus_idx if self.focus_idx >= 0 else None
         elif self.live_op in ("insert", "extract"):
             p = self.live_progress()
             hl_list = sorted(highlighted)
-            count = int(p * (len(hl_list) + 1))
+            count = max(1, int(p * len(hl_list))) if hl_list else 0
+            count = min(count, len(hl_list))
             highlighted = set(hl_list[:count])
+            if count > 0:
+                current = hl_list[count - 1]
         positions = self._compute_positions(rect, n)
-        self._draw_edges(surface, positions, n, highlighted)
-        self._draw_nodes(surface, positions, self.heap, highlighted, register=True)
-        self._draw_array_bar(surface, rect, self.heap, highlighted, register=True)
+        self._draw_edges(surface, positions, n, highlighted, current)
+        self._draw_nodes(
+            surface, positions, self.heap, highlighted, current, register=True,
+        )
+        self._draw_array_bar(
+            surface, rect, self.heap, highlighted, current, register=True,
+        )
 
     def _compute_positions(self, rect: pygame.Rect,
                            n: int) -> dict[int, tuple[int, int]]:
@@ -201,39 +211,55 @@ class HeapAnimation(BaseAnimation):
                 positions[nid] = (x, y)
         return positions
 
-    def _draw_edges(self, surface: pygame.Surface,
-                    positions: dict[int, tuple[int, int]],
-                    n: int, highlighted: set[int]) -> None:
+    def _draw_edges(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        n: int, highlighted: set[int],
+        current: int | None = None,
+    ) -> None:
         for i in range(n):
             left = 2 * i + 1
             right = 2 * i + 2
-            if left < n and i in positions and left in positions:
-                color = (config.HIGHLIGHT_COLOR
-                         if i in highlighted or left in highlighted
-                         else config.DIVIDER_COLOR)
-                pygame.draw.line(surface, color, positions[i],
-                                 positions[left], width=2)
-            if right < n and i in positions and right in positions:
-                color = (config.HIGHLIGHT_COLOR
-                         if i in highlighted or right in highlighted
-                         else config.DIVIDER_COLOR)
-                pygame.draw.line(surface, color, positions[i],
-                                 positions[right], width=2)
+            for child in (left, right):
+                if child < n and i in positions and child in positions:
+                    if current is not None and (i == current or child == current):
+                        color = config.PATH_EDGE_COLOR
+                        width = 3
+                    elif i in highlighted and child in highlighted:
+                        color = config.VISITED_COLOR
+                        width = 2
+                    elif i in highlighted or child in highlighted:
+                        color = config.HIGHLIGHT_COLOR
+                        width = 2
+                    else:
+                        color = config.DIVIDER_COLOR
+                        width = 2
+                    pygame.draw.line(
+                        surface, color, positions[i], positions[child], width=width,
+                    )
 
-    def _draw_nodes(self, surface: pygame.Surface,
-                    positions: dict[int, tuple[int, int]],
-                    values: list[int], highlighted: set[int],
-                    register: bool = False) -> None:
+    def _draw_nodes(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        values: list[int], highlighted: set[int],
+        current: int | None = None,
+        register: bool = False,
+    ) -> None:
         radius = 20
         for i, (x, y) in positions.items():
-            is_hl = i in highlighted
-            fg = config.HIGHLIGHT_COLOR if is_hl else config.TEXT_COLOR
-            border = fg
-            bg = config.CODE_BG
+            if current is not None and i == current:
+                role = "current"
+            elif i in highlighted:
+                role = "visited"
+            else:
+                role = "plain"
+            fg = self.color_for_role(role)
             val = values[i]
 
-            pygame.draw.circle(surface, bg, (x, y), radius)
-            pygame.draw.circle(surface, border, (x, y), radius, width=2)
+            pygame.draw.circle(surface, config.CODE_BG, (x, y), radius)
+            pygame.draw.circle(
+                surface, fg, (x, y), radius, width=3 if role == "current" else 2,
+            )
 
             val_surf = self._font.render(str(val), True, fg)
             vr = val_surf.get_rect(center=(x, y))
@@ -245,10 +271,13 @@ class HeapAnimation(BaseAnimation):
                     f"idx:{i}", hit, label=f"[{i}]={val}", index=i, value=val,
                 )
 
-    def _draw_array_bar(self, surface: pygame.Surface, rect: pygame.Rect,
-                        values: list[int],
-                        highlight_indices: set[int],
-                        register: bool = False) -> None:
+    def _draw_array_bar(
+        self, surface: pygame.Surface, rect: pygame.Rect,
+        values: list[int],
+        highlight_indices: set[int],
+        current: int | None = None,
+        register: bool = False,
+    ) -> None:
         n = len(values)
         if n == 0:
             return
@@ -261,21 +290,26 @@ class HeapAnimation(BaseAnimation):
         for i, v in enumerate(values):
             bx = sx + i * (box_s + 6)
             br = pygame.Rect(int(bx), sy, box_s, box_s)
-            is_hl = i in highlight_indices
-            fg = config.HIGHLIGHT_COLOR if is_hl else config.TEXT_COLOR
-            border = fg
-            bg = config.CODE_BG
+            if current is not None and i == current:
+                role = "current"
+            elif i in highlight_indices:
+                role = "visited"
+            else:
+                role = "plain"
+            fg = self.color_for_role(role)
+            border = fg if role != "plain" else config.DIVIDER_COLOR
 
-            pygame.draw.rect(surface, bg, br, border_radius=3)
-            pygame.draw.rect(surface, border, br, width=1, border_radius=3)
+            pygame.draw.rect(surface, config.CODE_BG, br, border_radius=3)
+            pygame.draw.rect(
+                surface, border, br,
+                width=2 if role != "plain" else 1, border_radius=3,
+            )
             vs = small.render(str(v), True, fg)
             vr = vs.get_rect(center=br.center)
             surface.blit(vs, vr)
 
             idx_s = small.render(str(i), True, config.SUBTEXT_COLOR)
-            ir = idx_s.get_rect(
-                center=(br.centerx, sy - 12)
-            )
+            ir = idx_s.get_rect(center=(br.centerx, sy - 12))
             surface.blit(idx_s, ir)
             if register:
                 self.register_hit(

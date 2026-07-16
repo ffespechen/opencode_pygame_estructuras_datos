@@ -131,26 +131,42 @@ class ArrayAnimation(BaseAnimation):
     ) -> list[AnimStep]:
         if op_id == "traverse" and self.values:
             return [
-                AnimStep(f"Índice {i} → {self.values[i]}", highlight_idx=i)
+                AnimStep(
+                    f"Índice {i} → {self.values[i]}",
+                    highlight_idx=i,
+                    highlight_set=frozenset(range(i + 1)),
+                    current_idx=i,
+                    note=f"{i + 1}/{len(self.values)} · Space=siguiente",
+                )
                 for i in range(len(self.values))
             ]
         if op_id == "search" and self.values and self._search_target is not None:
             target = self._search_target
             steps: list[AnimStep] = []
             for i, val in enumerate(self.values):
+                visited = frozenset(range(i + 1))
                 if val == target:
                     steps.append(AnimStep(
                         f"Comparar [{i}]={val} == {target} → encontrado",
                         highlight_idx=i,
-                        note="match",
+                        highlight_set=visited,
+                        current_idx=i,
+                        note="match · Space=siguiente",
                     ))
                     break
                 steps.append(AnimStep(
                     f"Comparar [{i}]={val} ≠ {target}",
                     highlight_idx=i,
+                    highlight_set=visited,
+                    current_idx=i,
+                    note=f"{i + 1}/{len(self.values)} · Space=siguiente",
                 ))
             else:
-                steps.append(AnimStep(f"{target} no está en el array", note="miss"))
+                steps.append(AnimStep(
+                    f"{target} no está en el array",
+                    highlight_set=frozenset(range(len(self.values))),
+                    note="miss",
+                ))
             return steps
         return []
 
@@ -194,14 +210,17 @@ class ArrayAnimation(BaseAnimation):
 
     def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         highlight = self.highlight_idx
+        visited: set[int] = set()
         second = -1
 
         if self.step_mode and self.steps:
-            highlight = self.highlight_idx
+            highlight = self.focus_idx if self.focus_idx >= 0 else self.highlight_idx
+            visited = set(self.highlight_set)
         elif self.live_op == "traverse":
             n = len(self.values)
             if n > 0:
                 highlight = min(int(self.live_progress() * n), n - 1)
+                visited = set(range(highlight + 1))
         elif self.live_op == "search":
             n = len(self.values)
             if n > 0 and self._search_target is not None:
@@ -211,51 +230,61 @@ class ArrayAnimation(BaseAnimation):
                     total = target_idx + 1 + 0.5
                     current = self.live_progress() * total
                     highlight = min(int(current), target_idx)
+                    visited = set(range(highlight + 1))
                     if self.live_progress() > 0.85:
                         second = target_idx
                 except ValueError:
                     current = int(self.live_progress() * n)
                     highlight = min(current, n - 1)
+                    visited = set(range(highlight + 1))
 
         self._draw_boxes(
             surface, rect, self.values,
-            highlight_idx=highlight, second_highlight=second, register=True,
+            highlight_idx=highlight, second_highlight=second,
+            visited=visited, register=True,
         )
 
     def _draw_boxes(
         self, surface: pygame.Surface, rect: pygame.Rect,
         values: list[int], highlight_idx: int = -1,
         second_highlight: int = -1, register: bool = False,
+        visited: set[int] | None = None,
     ) -> None:
         n = len(values)
         box_size = min(70, (rect.width - 40) // max(n, 1) - 8)
         total_width = n * (box_size + 8) - 8
         start_x = rect.x + (rect.width - total_width) // 2
         base_y = rect.y + rect.height // 2 - box_size // 2 + 15
+        visited = visited or set()
 
         for i, val in enumerate(values):
             bx = start_x + i * (box_size + 8)
             box_rect = pygame.Rect(bx, base_y, box_size, box_size)
 
             if i == highlight_idx:
-                color = config.HIGHLIGHT_COLOR
-                pygame.draw.rect(surface, color, box_rect, border_radius=6)
-                pygame.draw.rect(surface, color, box_rect, width=2, border_radius=6)
+                role = "current"
             elif i == second_highlight:
-                color = config.ACCENT_COLOR
-                pygame.draw.rect(surface, config.CODE_BG, box_rect, border_radius=6)
-                pygame.draw.rect(surface, color, box_rect, width=2, border_radius=6)
+                role = "frontier"
+            elif i in visited:
+                role = "visited"
             else:
-                color = config.TEXT_COLOR
-                pygame.draw.rect(surface, config.CODE_BG, box_rect, border_radius=6)
-                pygame.draw.rect(
-                    surface, config.DIVIDER_COLOR, box_rect, width=1, border_radius=6
-                )
+                role = "plain"
+            fg = self.color_for_role(role)
+            border = fg if role != "plain" else config.DIVIDER_COLOR
+            width = 3 if role == "current" else (2 if role != "plain" else 1)
 
-            val_surf = self._font.render(
-                str(val), True,
-                color if i == highlight_idx else config.TEXT_COLOR,
-            )
+            pygame.draw.rect(surface, config.CODE_BG, box_rect, border_radius=6)
+            if role == "current":
+                pygame.draw.rect(surface, fg, box_rect, border_radius=6)
+                pygame.draw.rect(surface, fg, box_rect, width=2, border_radius=6)
+                text_color = config.CODE_BG
+            else:
+                pygame.draw.rect(
+                    surface, border, box_rect, width=width, border_radius=6,
+                )
+                text_color = fg if role != "plain" else config.TEXT_COLOR
+
+            val_surf = self._font.render(str(val), True, text_color)
             val_rect = val_surf.get_rect(center=box_rect.center)
             surface.blit(val_surf, val_rect)
 

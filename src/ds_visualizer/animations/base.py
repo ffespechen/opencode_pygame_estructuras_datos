@@ -48,12 +48,23 @@ class HitTarget:
 
 @dataclass
 class AnimStep:
-    """Un frame del stepper pedagógico."""
+    """Un frame del stepper pedagógico.
+
+    ``highlight_set`` / ``highlight_ids`` = visitados acumulados.
+    ``current_idx`` / ``current_id`` = elemento activo en este paso (pintado distinto).
+    ``frontier_set`` = frontera (p. ej. cola BFS).
+    ``edge_pairs`` = aristas a resaltar (tuplas ordenadas (a, b) con a <= b, o (str, str)).
+    """
 
     message: str
     highlight_idx: int = -1
     highlight_set: frozenset[int] = field(default_factory=frozenset)
     highlight_ids: frozenset[str] = field(default_factory=frozenset)
+    current_idx: int = -1
+    current_id: str = ""
+    frontier_set: frozenset[int] = field(default_factory=frozenset)
+    frontier_ids: frozenset[str] = field(default_factory=frozenset)
+    edge_pairs: frozenset[tuple] = field(default_factory=frozenset)
     note: str = ""
 
 
@@ -73,6 +84,7 @@ class BaseAnimation:
     """Interfaz común: demo + interactivo + selección + stepper + undo."""
 
     LIVE_ANIM_DURATION = 0.85
+    STEP_DURATION = 1.05
     STATUS_DURATION = 2.8
     UNDO_LIMIT = 40
 
@@ -111,6 +123,13 @@ class BaseAnimation:
         self.steps: list[AnimStep] = []
         self.step_index = 0
         self.step_auto = False
+        self._step_timer = 0.0
+        self.focus_idx = -1
+        self.focus_id = ""
+        self.frontier_set: set[int] = set()
+        self.frontier_ids: set[str] = set()
+        self.step_edges: set[tuple] = set()
+        self.highlight_ids: set[str] = set()
 
         # Etapa 1 — undo
         self._undo_stack: list[dict[str, Any]] = []
@@ -309,15 +328,30 @@ class BaseAnimation:
         self.step_index = 0
         self.step_mode = False
         self.step_auto = False
+        self._step_timer = 0.0
+        self.focus_idx = -1
+        self.focus_id = ""
+        self.frontier_set = set()
+        self.frontier_ids = set()
+        self.step_edges = set()
+        self.highlight_ids = set()
+        self.highlight_set = set()
+        self.highlight_idx = -1
 
-    def begin_steps(self, steps: list[AnimStep], complexity: str = "") -> None:
+    def begin_steps(
+        self,
+        steps: list[AnimStep],
+        complexity: str = "",
+        auto: bool = True,
+    ) -> None:
         if not steps:
             self.clear_steps()
             return
         self.steps = list(steps)
         self.step_index = 0
         self.step_mode = True
-        self.step_auto = False
+        self.step_auto = auto
+        self._step_timer = 0.0
         self.live_op = None
         self._live_timer = 0.0
         if complexity:
@@ -336,6 +370,12 @@ class BaseAnimation:
         step = self.steps[self.step_index]
         self.highlight_idx = step.highlight_idx
         self.highlight_set = set(step.highlight_set)
+        self.highlight_ids = set(step.highlight_ids)
+        self.focus_idx = step.current_idx
+        self.focus_id = step.current_id
+        self.frontier_set = set(step.frontier_set)
+        self.frontier_ids = set(step.frontier_ids)
+        self.step_edges = set(step.edge_pairs)
         self.status_message = (
             f"Paso {self.step_index + 1}/{len(self.steps)}: {step.message}"
         )
@@ -344,13 +384,48 @@ class BaseAnimation:
         self._status_timer = 9999.0
         self.current_action = self.status_message
 
+    def role_for_index(self, idx: int) -> str:
+        """Rol visual: current | frontier | visited | plain."""
+        if self.focus_idx == idx:
+            return "current"
+        if idx in self.frontier_set:
+            return "frontier"
+        if idx in self.highlight_set:
+            return "visited"
+        if self.highlight_idx == idx and self.focus_idx < 0:
+            return "current"
+        return "plain"
+
+    def role_for_id(self, eid: str) -> str:
+        if self.focus_id and eid == self.focus_id:
+            return "current"
+        if eid in self.frontier_ids:
+            return "frontier"
+        if eid in self.highlight_ids:
+            return "visited"
+        return "plain"
+
+    def color_for_role(self, role: str) -> tuple[int, int, int]:
+        from ds_visualizer import config
+
+        if role == "current":
+            return config.CURRENT_COLOR
+        if role == "frontier":
+            return config.FRONTIER_COLOR
+        if role == "visited":
+            return config.VISITED_COLOR
+        return config.TEXT_COLOR
+
     def step_next(self) -> bool:
         if not self.step_mode or not self.steps:
             return False
+        self._step_timer = 0.0
         if self.step_index >= len(self.steps) - 1:
+            last = self.steps[-1]
             self.clear_steps()
-            self.status_message = "Stepper terminado"
+            self.status_message = f"Recorrido terminado — {last.message}"
             self._status_timer = self.STATUS_DURATION
+            self.current_action = self.status_message
             return True
         self.step_index += 1
         self._apply_current_step()
@@ -359,6 +434,8 @@ class BaseAnimation:
     def step_prev(self) -> bool:
         if not self.step_mode or not self.steps:
             return False
+        self.step_auto = False
+        self._step_timer = 0.0
         if self.step_index <= 0:
             return True
         self.step_index -= 1
@@ -370,9 +447,11 @@ class BaseAnimation:
             return False
         self.step_index = len(self.steps) - 1
         self._apply_current_step()
+        last = self.steps[-1]
         self.clear_steps()
-        self.status_message = "Stepper: fin"
+        self.status_message = f"Recorrido terminado — {last.message}"
         self._status_timer = self.STATUS_DURATION
+        self.current_action = self.status_message
         return True
 
     # --- challenges (etapa 3) --------------------------------------------
@@ -783,13 +862,22 @@ class BaseAnimation:
             self._status_timer = self.STATUS_DURATION * 2
             return True
 
-        # Stepper
+        # Stepper (Space avanza y pausa el auto; P reanuda)
         if self.step_mode:
             if key in (pygame.K_SPACE, pygame.K_RIGHT, pygame.K_PERIOD):
+                self.step_auto = False
                 self.step_next()
                 return True
             if key in (pygame.K_LEFT, pygame.K_COMMA):
                 self.step_prev()
+                return True
+            if key == pygame.K_p:
+                self.step_auto = not self.step_auto
+                self._step_timer = 0.0
+                self.status_message = (
+                    "Auto-paso ON" if self.step_auto else "Auto-paso pausado"
+                )
+                self._status_timer = self.STATUS_DURATION
                 return True
             if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_END):
                 self.step_finish()
@@ -828,11 +916,19 @@ class BaseAnimation:
             return
 
         if self.step_mode:
+            if self.step_auto:
+                self._step_timer += dt
+                if self._step_timer >= self.STEP_DURATION:
+                    self._step_timer = 0.0
+                    self.step_next()
+                    if not self.step_mode:
+                        return
             if self.steps:
                 step = self.steps[self.step_index]
+                auto = "auto" if self.step_auto else "pausado"
                 self.current_action = (
                     f"Paso {self.step_index + 1}/{len(self.steps)}: "
-                    f"{step.message}  [Space/←→]"
+                    f"{step.message}  [{auto} · Space=sig · P=auto]"
                 )
             return
 

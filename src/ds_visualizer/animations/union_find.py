@@ -71,22 +71,54 @@ class UnionFindAnimation(BaseAnimation):
     def build_steps(
         self, op_id: str, user_input: str | None = None
     ) -> list[AnimStep]:
-        if op_id != "find":
-            return []
-        elem = (user_input or self._find_element or "C").strip().upper()
-        if elem not in self.elements:
-            return []
-        path = self._find_path(elem)
-        steps = []
-        seen: set[str] = set()
-        for e in path:
-            seen.add(e)
-            steps.append(AnimStep(
-                f"Find: visitar {e}",
-                highlight_ids=frozenset(seen),
-                note=e,
-            ))
-        return steps
+        if op_id == "find":
+            elem = (user_input or self._find_element or "C").strip().upper()
+            if elem not in self.elements:
+                return []
+            path = self._find_path(elem)
+            steps = []
+            seen: set[str] = set()
+            edges: list[tuple[str, str]] = []
+            for i, e in enumerate(path):
+                seen.add(e)
+                if i > 0:
+                    edges.append((path[i - 1], e))
+                steps.append(AnimStep(
+                    f"Find: visitar {e}"
+                    + (f" → raíz" if i == len(path) - 1 else ""),
+                    highlight_ids=frozenset(seen),
+                    current_id=e,
+                    edge_pairs=frozenset(edges),
+                    note=f"{i + 1}/{len(path)} · Space=siguiente",
+                ))
+            return steps
+        if op_id == "union":
+            pair = self.parse_pair(user_input or "")
+            if pair is None:
+                return []
+            a, b = pair
+            if a not in self.elements or b not in self.elements:
+                return []
+            # Tras apply_operation ya están unidos; mostrar a, b y la nueva arista
+            ra = self._find_root(a)
+            return [
+                AnimStep(
+                    f"Union: Find({a}) y Find({b})",
+                    highlight_ids=frozenset({a, b}),
+                    current_id=a,
+                    note="1/2 · Space=siguiente",
+                ),
+                AnimStep(
+                    f"Union: enlace bajo raíz {ra}",
+                    highlight_ids=frozenset({a, b, ra}),
+                    current_id=ra,
+                    edge_pairs=frozenset(
+                        [(x, self.parent[x]) for x in (a, b) if self.parent[x] != x]
+                    ),
+                    note="2/2 · Space=siguiente",
+                ),
+            ]
+        return []
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id == "find":
@@ -98,10 +130,9 @@ class UnionFindAnimation(BaseAnimation):
                 return f"'{elem}' no existe. Elementos: A-F"
             self._find_element = elem
             path = self._find_path(elem)
-            self._highlighted = set(path)
-            self._highlight_edges = [
-                (path[i], path[i + 1]) for i in range(len(path) - 1)
-            ]
+            # Stepper pinta iteración a iteración
+            self._highlighted = set()
+            self._highlight_edges = []
             root = path[-1]
             return f"Find({elem}) = {root}"
         if op_id == "union":
@@ -113,12 +144,12 @@ class UnionFindAnimation(BaseAnimation):
                 return f"Elementos válidos: A-F"
             ra, rb = self._find_root(a), self._find_root(b)
             if ra == rb:
-                self._highlighted = {a, b, ra}
+                self._highlighted = set()
                 self._highlight_edges = []
                 return f"Union({a},{b}): ya en el mismo conjunto"
             self.parent[rb] = ra
-            self._highlighted = {a, b, ra, rb}
-            self._highlight_edges = [(b, ra)]
+            self._highlighted = set()
+            self._highlight_edges = []
             return f"Union({a},{b}): {b} → {ra}"
         return ""
 
@@ -131,17 +162,27 @@ class UnionFindAnimation(BaseAnimation):
         if self.interactive:
             highlighted = set(self._highlighted)
             edges = list(self._highlight_edges)
-            if self.live_op == "find":
+            current: str | None = None
+            if self.step_mode:
+                highlighted = set(self.highlight_ids)
+                current = self.focus_id or None
+                edges = [
+                    (a, b) for a, b in self.step_edges
+                    if isinstance(a, str) and isinstance(b, str)
+                ]
+            elif self.live_op == "find":
                 path = self._find_path(self._find_element)
-                count = int(self.live_progress() * (len(path) + 1))
+                count = max(1, int(self.live_progress() * len(path)))
+                count = min(count, len(path))
                 highlighted = set(path[:count])
+                current = path[count - 1]
                 edges = [
                     (path[i], path[i + 1])
                     for i in range(min(count - 1, len(path) - 1))
                 ]
             self._draw_forest(
                 surface, rect, self.parent, self._roots(),
-                highlighted, edges,
+                highlighted, edges, current=current,
             )
             self._hint(surface, rect, self.operations_hint())
             return
@@ -176,13 +217,17 @@ class UnionFindAnimation(BaseAnimation):
         label: str,
         highlight: bool = False,
         is_root: bool = False,
+        role: str | None = None,
     ) -> None:
         x, y = pos
         radius = 22
-        fg = config.HIGHLIGHT_COLOR if highlight else config.TEXT_COLOR
+        if role is None:
+            role = "visited" if highlight else "plain"
+        fg = self.color_for_role(role)
         border = config.ACCENT_COLOR if is_root else fg
+        width = 3 if role == "current" or is_root else 2
         pygame.draw.circle(surface, config.CODE_BG, (x, y), radius)
-        pygame.draw.circle(surface, border, (x, y), radius, width=2 if not is_root else 3)
+        pygame.draw.circle(surface, border, (x, y), radius, width=width)
         lbl = self._font.render(label, True, fg)
         surface.blit(lbl, lbl.get_rect(center=(x, y)))
 
@@ -193,8 +238,9 @@ class UnionFindAnimation(BaseAnimation):
         parent: tuple[int, int],
         highlight: bool = False,
     ) -> None:
-        color = config.HIGHLIGHT_COLOR if highlight else config.DIVIDER_COLOR
-        pygame.draw.line(surface, color, child, parent, width=2)
+        color = config.PATH_EDGE_COLOR if highlight else config.DIVIDER_COLOR
+        width = 3 if highlight else 2
+        pygame.draw.line(surface, color, child, parent, width=width)
         dx = parent[0] - child[0]
         dy = parent[1] - child[1]
         length = max((dx * dx + dy * dy) ** 0.5, 1)
@@ -216,9 +262,11 @@ class UnionFindAnimation(BaseAnimation):
         roots: set[str],
         highlighted: set[str] | None = None,
         highlight_edges: list[tuple[str, str]] | None = None,
+        current: str | None = None,
     ) -> None:
         highlighted = highlighted or set()
         highlight_edges = highlight_edges or []
+        edge_set = set(highlight_edges)
         pos = self._positions(rect)
 
         for child, par in parent.items():
@@ -227,16 +275,23 @@ class UnionFindAnimation(BaseAnimation):
                     surface,
                     pos[child],
                     pos[par],
-                    highlight=(child, par) in highlight_edges,
+                    highlight=(child, par) in edge_set or (par, child) in edge_set,
                 )
 
         for name in self.elements:
+            if current and name == current:
+                role = "current"
+            elif name in highlighted:
+                role = "visited"
+            else:
+                role = "plain"
             self._draw_node(
                 surface,
                 pos[name],
                 name,
                 highlight=name in highlighted,
                 is_root=name in roots,
+                role=role,
             )
             x, y = pos[name]
             hit = pygame.Rect(x - 22, y - 22, 44, 44)

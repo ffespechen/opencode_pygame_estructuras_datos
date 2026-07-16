@@ -33,6 +33,8 @@ class GraphAnimation(BaseAnimation):
         self._next_vertex_id = 6
         self._highlighted: set[int] = set()
         self._last_order: list[int] = []
+        self._last_parents: dict[int, int | None] = {}
+        self._last_tree_edges: list[tuple[int, int]] = []
         self.actions = [
             ("BFS: recorrido en anchura", 5.0),
             ("DFS: recorrido en profundidad", 5.0),
@@ -88,6 +90,8 @@ class GraphAnimation(BaseAnimation):
         self._next_vertex_id = 6
         self._highlighted = set()
         self._last_order = []
+        self._last_parents = {}
+        self._last_tree_edges = []
         self.extra_vertex = None
         self.extra_edge = None
         self._edge_pending = None
@@ -99,36 +103,133 @@ class GraphAnimation(BaseAnimation):
                 return vid
         return None
 
-    def _bfs(self, start: int = 0) -> list[int]:
+    def _neighbors(self, v: int) -> list[int]:
+        nbrs: list[int] = []
+        for a, b in self.edges:
+            if a == v:
+                nbrs.append(b)
+            elif b == v:
+                nbrs.append(a)
+        return nbrs
+
+    def _bfs(self, start: int = 0) -> tuple[list[int], dict[int, int | None]]:
         visited: list[int] = []
         queue = [start]
         seen = {start}
+        parent: dict[int, int | None] = {start: None}
         while queue:
             v = queue.pop(0)
             visited.append(v)
-            for a, b in self.edges:
-                nbr = b if a == v else a if b == v else None
-                if nbr is not None and nbr not in seen:
+            for nbr in self._neighbors(v):
+                if nbr not in seen:
                     seen.add(nbr)
+                    parent[nbr] = v
                     queue.append(nbr)
-        return visited
+        return visited, parent
 
-    def _dfs(self, start: int = 0) -> list[int]:
+    def _dfs(self, start: int = 0) -> tuple[list[int], dict[int, int | None]]:
         visited: list[int] = []
         seen: set[int] = set()
+        parent: dict[int, int | None] = {start: None}
 
         def walk(v: int) -> None:
             if v in seen:
                 return
             seen.add(v)
             visited.append(v)
-            for a, b in self.edges:
-                nbr = b if a == v else a if b == v else None
-                if nbr is not None and nbr not in seen:
+            for nbr in self._neighbors(v):
+                if nbr not in seen:
+                    parent[nbr] = v
                     walk(nbr)
 
         walk(start)
-        return visited
+        return visited, parent
+
+    def _build_bfs_steps(self, start: int) -> list[AnimStep]:
+        """Un paso por visita; frontera = cola BFS restante."""
+        steps: list[AnimStep] = []
+        order: list[int] = []
+        queue = [start]
+        seen = {start}
+        parent: dict[int, int | None] = {start: None}
+        tree: list[tuple[int, int]] = []
+
+        while queue:
+            v = queue.pop(0)
+            order.append(v)
+            for nbr in self._neighbors(v):
+                if nbr not in seen:
+                    seen.add(nbr)
+                    parent[nbr] = v
+                    tree.append(tuple(sorted((v, nbr))))
+                    queue.append(nbr)
+
+            label = self.vertices.get(v, "?")
+            via = ""
+            p = parent.get(v)
+            if p is not None:
+                via = f" vía {self.vertices.get(p, '?')}"
+            frontier = list(queue)
+            steps.append(AnimStep(
+                f"BFS: visitar {label}{via}",
+                highlight_set=frozenset(order),
+                current_idx=v,
+                frontier_set=frozenset(frontier),
+                edge_pairs=frozenset(tree),
+                note=(
+                    f"{len(order)} · cola=["
+                    + ",".join(self.vertices.get(x, "?") for x in frontier)
+                    + "]"
+                ),
+            ))
+
+        self._last_order = order
+        self._last_parents = parent
+        self._last_tree_edges = list(tree)
+        return steps
+
+    def _build_dfs_steps(self, start: int) -> list[AnimStep]:
+        """Un paso por visita; frontera = vecinos aún no explorados."""
+        steps: list[AnimStep] = []
+        order: list[int] = []
+        seen: set[int] = set()
+        parent: dict[int, int | None] = {start: None}
+        tree: list[tuple[int, int]] = []
+
+        def walk(v: int) -> None:
+            if v in seen:
+                return
+            seen.add(v)
+            order.append(v)
+            pending = [n for n in self._neighbors(v) if n not in seen]
+            label = self.vertices.get(v, "?")
+            via = ""
+            p = parent.get(v)
+            if p is not None:
+                via = f" vía {self.vertices.get(p, '?')}"
+            steps.append(AnimStep(
+                f"DFS: visitar {label}{via}",
+                highlight_set=frozenset(order),
+                current_idx=v,
+                frontier_set=frozenset(pending),
+                edge_pairs=frozenset(tree),
+                note=(
+                    f"{len(order)} · pend=["
+                    + ",".join(self.vertices.get(x, "?") for x in pending)
+                    + "]"
+                ),
+            ))
+            for nbr in self._neighbors(v):
+                if nbr not in seen:
+                    parent[nbr] = v
+                    tree.append(tuple(sorted((v, nbr))))
+                    walk(nbr)
+
+        walk(start)
+        self._last_order = order
+        self._last_parents = parent
+        self._last_tree_edges = list(tree)
+        return steps
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         labels = ", ".join(self.vertices[v] for v in sorted(self.vertices))
@@ -140,12 +241,18 @@ class GraphAnimation(BaseAnimation):
             start = self._label_to_id(token)
             if start is None:
                 return f"'{token}' no existe. Vértices: {labels}"
-            order = self._bfs(start) if op_id == "bfs" else self._dfs(start)
-            self._last_order = order
-            self._highlighted = set(order)
+            self._highlighted = set()
             name = "BFS" if op_id == "bfs" else "DFS"
-            path = " -> ".join(self.vertices[v] for v in order)
-            return f"{name} desde {self.vertices[start]}: {path}"
+            # build_steps recalcula el recorrido; acá solo validamos
+            if op_id == "bfs":
+                order, _parent = self._bfs(start)
+            else:
+                order, _parent = self._dfs(start)
+            self._last_order = order
+            return (
+                f"{name} desde {self.vertices[start]} "
+                f"({len(order)} pasos — avanza solo)"
+            )
 
         if op_id == "add_vertex":
             token = self.parse_token(user_input or "")
@@ -190,7 +297,6 @@ class GraphAnimation(BaseAnimation):
         if op.op_id in ("bfs", "dfs"):
             return self.selected_label.split()[0] if self.selected_label else None
         if op.op_id == "add_edge":
-            # Primer click guarda extremo; segundo completa el par
             label = self.selected_label.split()[0] if self.selected_label else ""
             if not label:
                 return None
@@ -207,20 +313,17 @@ class GraphAnimation(BaseAnimation):
     def build_steps(
         self, op_id: str, user_input: str | None = None
     ) -> list[AnimStep]:
-        if op_id in ("bfs", "dfs") and self._last_order:
-            name = "BFS" if op_id == "bfs" else "DFS"
-            steps: list[AnimStep] = []
-            seen: list[int] = []
-            for vid in self._last_order:
-                seen.append(vid)
-                label = self.vertices.get(vid, "?")
-                steps.append(AnimStep(
-                    f"{name}: visitar {label}",
-                    highlight_set=frozenset(seen),
-                    note=f"cola/pila → {label}",
-                ))
-            return steps
-        return []
+        if op_id not in ("bfs", "dfs"):
+            return []
+        token = self.parse_token(user_input or "A")
+        if token is None:
+            return []
+        start = self._label_to_id(token)
+        if start is None:
+            return []
+        if op_id == "bfs":
+            return self._build_bfs_steps(start)
+        return self._build_dfs_steps(start)
 
     def on_drop(self, source_id: str, dest: HitTarget | None) -> str:
         if dest is None:
@@ -274,25 +377,144 @@ class GraphAnimation(BaseAnimation):
             highlighted = self._get_add_edge_states()
 
         active_edges = self._get_active_edges(positions, highlighted)
-        self._draw_edges_lines(surface, positions, active_edges, highlighted)
-        self._draw_vertices_circles(surface, positions, highlighted)
+        current = None
+        if highlighted and self.action_index in (0, 1):
+            order = self.bfs_order if self.action_index == 0 else self.dfs_order
+            for vid in reversed(order):
+                if vid in highlighted:
+                    current = vid
+                    break
+        self._draw_edges_lines(surface, positions, active_edges, highlighted, current)
+        self._draw_vertices_circles(surface, positions, highlighted, current)
 
     def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         positions = self._compute_positions(rect)
-        highlighted = set(self._highlighted)
-        if self.live_op in ("bfs", "dfs") and self._last_order:
-            count = int(self.live_progress() * (len(self._last_order) + 1))
-            highlighted = set(self._last_order[:count])
-        active_edges = self._get_active_edges(positions, highlighted)
-        self._draw_edges_lines(surface, positions, active_edges, highlighted)
-        self._draw_vertices_circles(surface, positions, highlighted, register=True)
 
-        hint = self._font.render(
-            "Click vértice + BFS/DFS  |  Drag A→B = arista  |  Space = paso",
+        visited: set[int] = set()
+        current: int | None = None
+        frontier: set[int] = set()
+        path_edges: set[tuple[int, int]] = set()
+
+        if self.step_mode:
+            visited = set(self.highlight_set)
+            current = self.focus_idx if self.focus_idx >= 0 else None
+            frontier = set(self.frontier_set)
+            path_edges = {
+                (min(a, b), max(a, b)) for a, b in self.step_edges
+                if isinstance(a, int) and isinstance(b, int)
+            }
+        elif self.live_op in ("bfs", "dfs") and self._last_order:
+            # Fallback si no hubo stepper: animación lenta por progreso
+            n = len(self._last_order)
+            count = max(1, int(self.live_progress() * n))
+            count = min(count, n)
+            visited = set(self._last_order[:count])
+            current = self._last_order[count - 1]
+            path_edges = set(self._last_tree_edges[: max(0, count - 1)])
+        else:
+            visited = set(self._highlighted)
+
+        self._draw_edges_lines(surface, positions, path_edges, visited, current)
+        self._draw_vertices_circles(
+            surface, positions, visited, current, frontier, register=True,
+        )
+
+        legend = self._font.render(
+            "Amarillo=actual  Cian=visitado  Verde=cola/frontera  |  auto ~1s",
             True,
             config.SUBTEXT_COLOR,
         )
-        surface.blit(hint, hint.get_rect(midtop=(rect.centerx, rect.y + 8)))
+        surface.blit(legend, legend.get_rect(midtop=(rect.centerx, rect.y + 8)))
+
+    def _draw_edges_lines(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        path_edges: set[tuple[int, int]],
+        visited: set[int],
+        current: int | None = None,
+    ) -> None:
+        drawn: set[tuple[int, int]] = set()
+        for a, b in self.edges:
+            if a not in positions or b not in positions:
+                continue
+            edge = tuple(sorted((a, b)))
+            if edge in drawn:
+                continue
+            drawn.add(edge)
+            if edge in path_edges:
+                color = config.PATH_EDGE_COLOR
+                width = 4
+            elif a in visited and b in visited:
+                color = config.VISITED_COLOR
+                width = 2
+            else:
+                color = config.DIVIDER_COLOR
+                width = 2
+            pygame.draw.line(
+                surface, color, positions[a], positions[b], width=width,
+            )
+
+    def _draw_vertices_circles(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        visited: set[int],
+        current: int | None = None,
+        frontier: set[int] | None = None,
+        register: bool = False,
+        highlighted: set[int] | None = None,
+    ) -> None:
+        if highlighted is not None and not visited:
+            visited = highlighted
+        frontier = frontier or set()
+        radius = 24
+        for vid, (x, y) in positions.items():
+            if current is not None and vid == current:
+                role = "current"
+            elif vid in frontier:
+                role = "frontier"
+            elif vid in visited:
+                role = "visited"
+            else:
+                role = "plain"
+
+            if role == "current":
+                fill = config.CURRENT_COLOR
+                border = config.CURRENT_COLOR
+                text_c = config.CODE_BG
+                width = 3
+            elif role == "frontier":
+                fill = config.FRONTIER_COLOR
+                border = config.FRONTIER_COLOR
+                text_c = config.CODE_BG
+                width = 2
+            elif role == "visited":
+                fill = config.VISITED_COLOR
+                border = config.VISITED_COLOR
+                text_c = config.CODE_BG
+                width = 2
+            else:
+                fill = config.CODE_BG
+                border = config.DIVIDER_COLOR
+                text_c = config.TEXT_COLOR
+                width = 2
+
+            pygame.draw.circle(surface, fill, (x, y), radius)
+            pygame.draw.circle(surface, border, (x, y), radius, width=width)
+            if role == "current":
+                pygame.draw.circle(
+                    surface, config.HIGHLIGHT_COLOR, (x, y), radius + 5, width=2,
+                )
+
+            label = self.vertices.get(vid, "?")
+            val_surf = self._font.render(label, True, text_c)
+            val_rect = val_surf.get_rect(center=(x, y))
+            surface.blit(val_surf, val_rect)
+
+            if register:
+                hit = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
+                self.register_hit(
+                    f"v:{vid}", hit, label=label, index=vid, draggable=True,
+                )
 
     def _compute_positions(self, rect: pygame.Rect) -> dict[int, tuple[int, int]]:
         cx = rect.x + rect.width // 2
@@ -312,55 +534,6 @@ class GraphAnimation(BaseAnimation):
             positions[6] = (cx + int(rx * 0.3), cy - int(ry * 0.2))
 
         return positions
-
-    def _draw_edges_lines(
-        self, surface: pygame.Surface,
-        positions: dict[int, tuple[int, int]],
-        active_edges: set[tuple[int, int]],
-        highlighted: set[int],
-    ) -> None:
-        drawn: set[tuple[int, int]] = set()
-        for a, b in self.edges:
-            if a in positions and b in positions:
-                edge = tuple(sorted((a, b)))
-                if edge not in drawn:
-                    drawn.add(edge)
-                    color = (
-                        config.HIGHLIGHT_COLOR
-                        if edge in active_edges
-                        else config.DIVIDER_COLOR
-                    )
-                    width = 3 if edge in active_edges else 2
-                    pygame.draw.line(
-                        surface, color, positions[a], positions[b], width=width,
-                    )
-
-    def _draw_vertices_circles(
-        self, surface: pygame.Surface,
-        positions: dict[int, tuple[int, int]],
-        highlighted: set[int],
-        register: bool = False,
-    ) -> None:
-        radius = 24
-        for vid, (x, y) in positions.items():
-            is_highlighted = vid in highlighted
-            fg = config.HIGHLIGHT_COLOR if is_highlighted else config.TEXT_COLOR
-            border = fg
-            bg = config.CODE_BG
-
-            pygame.draw.circle(surface, bg, (x, y), radius)
-            pygame.draw.circle(surface, border, (x, y), radius, width=2)
-
-            label = self.vertices.get(vid, "?")
-            val_surf = self._font.render(label, True, fg)
-            val_rect = val_surf.get_rect(center=(x, y))
-            surface.blit(val_surf, val_rect)
-
-            if register:
-                hit = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
-                self.register_hit(
-                    f"v:{vid}", hit, label=label, index=vid, draggable=True,
-                )
 
     def _get_active_edges(
         self, positions: dict[int, tuple[int, int]], highlighted: set[int],

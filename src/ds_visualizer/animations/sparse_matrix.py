@@ -88,13 +88,18 @@ class SparseMatrixAnimation(BaseAnimation):
     ) -> list[AnimStep]:
         if op_id != "traverse" or not self.entries:
             return []
-        return [
-            AnimStep(
+        steps = []
+        seen_ids: set[str] = set()
+        for i, (r, c, v) in enumerate(self.entries):
+            cell_id = f"{r},{c}"
+            seen_ids.add(cell_id)
+            steps.append(AnimStep(
                 f"COO [{i + 1}/{len(self.entries)}]: ({r},{c},{v})",
-                note=f"({r},{c})",
-            )
-            for i, (r, c, v) in enumerate(self.entries)
-        ]
+                highlight_ids=frozenset(seen_ids),
+                current_id=cell_id,
+                note=f"({r},{c}) · Space=siguiente",
+            ))
+        return steps
 
     def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
         if op_id == "insert":
@@ -137,22 +142,31 @@ class SparseMatrixAnimation(BaseAnimation):
 
         if self.interactive:
             highlight = self._highlight_cell
+            visited: set[tuple[int, int]] = set()
             if self.step_mode and self.steps:
-                note = self.steps[self.step_index].note
-                if note.startswith("(") and "," in note:
+                if self.focus_id and "," in self.focus_id:
                     try:
-                        parts = note.strip("()").split(",")
+                        parts = self.focus_id.split(",")
                         highlight = (int(parts[0]), int(parts[1]))
                     except ValueError:
                         pass
+                for cid in self.highlight_ids:
+                    if "," in cid:
+                        try:
+                            parts = cid.split(",")
+                            visited.add((int(parts[0]), int(parts[1])))
+                        except ValueError:
+                            pass
             elif self.live_op == "traverse":
                 n = len(self.entries)
                 if n > 0:
                     idx = min(int(self.live_progress() * n), n - 1)
                     r, c, _ = self.entries[idx]
                     highlight = (r, c)
+                    visited = {(er, ec) for er, ec, _ in self.entries[: idx + 1]}
             self._draw_grid(
-                surface, rect, self.entries, highlight=highlight, register=True,
+                surface, rect, self.entries,
+                highlight=highlight, visited=visited, register=True,
             )
             return
 
@@ -182,6 +196,7 @@ class SparseMatrixAnimation(BaseAnimation):
         highlight: tuple[int, int] | None = None,
         dim_zeros: bool = True,
         register: bool = False,
+        visited: set[tuple[int, int]] | None = None,
     ) -> None:
         cell = min(48, (rect.width - 200) // self.cols, (rect.height - 80) // self.rows)
         cell = max(cell, 28)
@@ -190,6 +205,7 @@ class SparseMatrixAnimation(BaseAnimation):
         start_x = rect.x + (rect.width - grid_w) // 2 - 40
         start_y = rect.y + (rect.height - grid_h) // 2 - 10
         data = self._entry_map(entries)
+        visited = visited or set()
 
         for r in range(self.rows):
             for c in range(self.cols):
@@ -197,21 +213,34 @@ class SparseMatrixAnimation(BaseAnimation):
                 y = start_y + r * cell
                 box = pygame.Rect(x, y, cell - 2, cell - 2)
                 val = data.get((r, c), 0)
-                is_hl = highlight == (r, c)
                 is_nz = val != 0
 
-                if is_hl:
-                    fg = config.HIGHLIGHT_COLOR
+                if highlight == (r, c):
+                    role = "current"
+                elif (r, c) in visited:
+                    role = "visited"
+                else:
+                    role = "plain"
+
+                if role == "current":
+                    fg = self.color_for_role("current")
                     border = fg
+                    width = 3
+                elif role == "visited":
+                    fg = self.color_for_role("visited")
+                    border = fg
+                    width = 2
                 elif is_nz:
                     fg = config.ACCENT_COLOR
                     border = config.ACCENT_COLOR
+                    width = 2
                 else:
                     fg = config.SUBTEXT_COLOR if dim_zeros else config.TEXT_COLOR
                     border = config.DIVIDER_COLOR
+                    width = 1
 
                 pygame.draw.rect(surface, config.CODE_BG, box, border_radius=3)
-                pygame.draw.rect(surface, border, box, width=2, border_radius=3)
+                pygame.draw.rect(surface, border, box, width=width, border_radius=3)
                 vs = self._font.render(str(val), True, fg)
                 surface.blit(vs, vs.get_rect(center=box.center))
                 if register:
@@ -225,7 +254,13 @@ class SparseMatrixAnimation(BaseAnimation):
         header = self._font.render("COO (i,j,v)", True, config.ACCENT_COLOR)
         surface.blit(header, (list_x, list_y - 22))
         for i, (r, c, v) in enumerate(entries):
-            line = self._font.render(f"({r},{c},{v})", True, config.TEXT_COLOR)
+            if highlight == (r, c):
+                color = self.color_for_role("current")
+            elif (r, c) in visited:
+                color = self.color_for_role("visited")
+            else:
+                color = config.TEXT_COLOR
+            line = self._font.render(f"({r},{c},{v})", True, color)
             surface.blit(line, (list_x, list_y + i * 20))
 
     def _draw_overview(self, surface: pygame.Surface, rect: pygame.Rect) -> None:

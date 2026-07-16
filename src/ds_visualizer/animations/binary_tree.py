@@ -80,7 +80,8 @@ class BinaryTreeAnimation(BaseAnimation):
             steps.append(AnimStep(
                 f"{op_id}: {nodes[nid]['v']}",
                 highlight_set=frozenset(seen),
-                note=str(nodes[nid]["v"]),
+                current_idx=nid,
+                note=f"{nodes[nid]['v']} · Space=siguiente",
             ))
         return steps
 
@@ -223,20 +224,26 @@ class BinaryTreeAnimation(BaseAnimation):
         positions = self._compute_positions_dynamic(nodes, rect)
 
         highlighted: set[int] = set(self.highlight_set)
-        if self.step_mode and self.highlight_set:
+        current: int | None = None
+        if self.step_mode:
             highlighted = set(self.highlight_set)
+            current = self.focus_idx if self.focus_idx >= 0 else None
         elif self.live_op in ("preorder", "inorder", "postorder"):
             order = self._traversal_order(nodes, self.live_op)
             count = int(self.live_progress() * (len(order) + 1))
             highlighted = set(order[:count])
+            if count > 0:
+                current = order[min(count - 1, len(order) - 1)]
         elif self.live_op == "insert":
             highlighted = set(nodes.keys())
 
         edges_drawn: set[tuple[int, int]] = set()
         self._draw_edges_interactive(
-            surface, positions, nodes, 0, highlighted, edges_drawn,
+            surface, positions, nodes, 0, highlighted, edges_drawn, current,
         )
-        self._draw_nodes_interactive(surface, positions, nodes, highlighted)
+        self._draw_nodes_interactive(
+            surface, positions, nodes, highlighted, current,
+        )
 
     def _draw_edges_interactive(
         self, surface: pygame.Surface,
@@ -245,6 +252,7 @@ class BinaryTreeAnimation(BaseAnimation):
         node_id: int,
         highlighted: set[int],
         drawn: set[tuple[int, int]],
+        current: int | None = None,
     ) -> None:
         if node_id not in nodes:
             return
@@ -255,17 +263,26 @@ class BinaryTreeAnimation(BaseAnimation):
                 edge = (node_id, child_id)
                 if edge not in drawn:
                     drawn.add(edge)
-                    color = (
-                        config.HIGHLIGHT_COLOR
-                        if node_id in highlighted or child_id in highlighted
-                        else config.DIVIDER_COLOR
+                    is_path = (
+                        (current is not None and (
+                            node_id == current or child_id == current
+                        ))
+                        or (node_id in highlighted and child_id in highlighted)
                     )
+                    color = (
+                        config.PATH_EDGE_COLOR if is_path else config.DIVIDER_COLOR
+                    )
+                    width = 3 if (
+                        current is not None
+                        and (node_id == current or child_id == current)
+                    ) else 2
                     pygame.draw.line(
                         surface, color, positions[node_id], positions[child_id],
-                        width=2,
+                        width=width,
                     )
                     self._draw_edges_interactive(
                         surface, positions, nodes, child_id, highlighted, drawn,
+                        current,
                     )
 
     def _draw_nodes_interactive(
@@ -273,13 +290,21 @@ class BinaryTreeAnimation(BaseAnimation):
         positions: dict[int, tuple[int, int]],
         nodes: dict,
         highlighted: set[int],
+        current: int | None = None,
     ) -> None:
         radius = 22
         for nid, (x, y) in positions.items():
-            is_highlighted = nid in highlighted
-            fg = config.HIGHLIGHT_COLOR if is_highlighted else config.TEXT_COLOR
+            if current is not None and nid == current:
+                role = "current"
+            elif nid in highlighted:
+                role = "visited"
+            else:
+                role = "plain"
+            fg = self.color_for_role(role)
             pygame.draw.circle(surface, config.CODE_BG, (x, y), radius)
-            pygame.draw.circle(surface, fg, (x, y), radius, width=2)
+            pygame.draw.circle(
+                surface, fg, (x, y), radius, width=3 if role == "current" else 2,
+            )
             val = nodes[nid]["v"]
             val_surf = self._font.render(str(val), True, fg)
             surface.blit(val_surf, val_surf.get_rect(center=(x, y)))

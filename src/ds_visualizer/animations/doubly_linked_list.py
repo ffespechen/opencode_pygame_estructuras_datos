@@ -102,18 +102,28 @@ class DoublyLinkedListAnimation(BaseAnimation):
     ) -> list[AnimStep]:
         if op_id == "forward" and self.values:
             return [
-                AnimStep(f"Adelante → nodo {i} = {v}", highlight_idx=i)
+                AnimStep(
+                    f"Adelante → nodo {i} = {v}",
+                    highlight_idx=i,
+                    highlight_set=frozenset(range(i + 1)),
+                    current_idx=i,
+                    note=f"{i + 1}/{len(self.values)} · Space=siguiente",
+                )
                 for i, v in enumerate(self.values)
             ]
         if op_id == "backward" and self.values:
             n = len(self.values)
-            return [
-                AnimStep(
+            steps = []
+            for k, i in enumerate(range(n - 1, -1, -1)):
+                visited = frozenset(range(i, n))
+                steps.append(AnimStep(
                     f"Atrás → nodo {i} = {self.values[i]}",
                     highlight_idx=i,
-                )
-                for i in range(n - 1, -1, -1)
-            ]
+                    highlight_set=visited,
+                    current_idx=i,
+                    note=f"{k + 1}/{n} · Space=siguiente",
+                ))
+            return steps
         return []
 
     def draw(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
@@ -138,17 +148,23 @@ class DoublyLinkedListAnimation(BaseAnimation):
     def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         highlight = self.highlight_idx
         n = len(self.values)
+        visited: set[int] = set(self.highlight_set)
 
-        if self.live_op == "forward" and n > 0 and not self.step_mode:
+        if self.step_mode:
+            highlight = self.focus_idx if self.focus_idx >= 0 else self.highlight_idx
+        elif self.live_op == "forward" and n > 0 and not self.step_mode:
             highlight = min(int(self.live_progress() * n), n - 1)
+            visited = set(range(highlight + 1))
         elif self.live_op == "backward" and n > 0 and not self.step_mode:
             highlight = max(n - 1 - int(self.live_progress() * n), 0)
+            visited = set(range(highlight, n))
 
         if not self.values:
             self.draw_empty(surface, rect, "(lista vacía)")
             return
         self._draw_nodes(
-            surface, rect, self.values, highlight_idx=highlight, register=True,
+            surface, rect, self.values,
+            highlight_idx=highlight, visited=visited, register=True,
         )
 
     def _draw_nodes(
@@ -159,6 +175,7 @@ class DoublyLinkedListAnimation(BaseAnimation):
         highlight_idx: int = -1,
         show_labels: bool = True,
         register: bool = False,
+        visited: set[int] | None = None,
     ) -> None:
         n = len(values)
         node_w, node_h = 70, 44
@@ -166,20 +183,26 @@ class DoublyLinkedListAnimation(BaseAnimation):
         total_width = n * node_w + (n - 1) * gap
         start_x = rect.x + (rect.width - total_width) // 2
         base_y = rect.y + rect.height // 2 - node_h // 2
+        visited = visited or set()
 
         for i, val in enumerate(values):
             nx = start_x + i * (node_w + gap)
             node_rect = pygame.Rect(nx, base_y, node_w, node_h)
 
             if i == highlight_idx:
-                fg = config.HIGHLIGHT_COLOR
-                border = fg
+                role = "current"
+            elif i in visited:
+                role = "visited"
             else:
-                fg = config.TEXT_COLOR
-                border = config.DIVIDER_COLOR
+                role = "plain"
+            fg = self.color_for_role(role)
+            border = fg
 
             pygame.draw.rect(surface, config.CODE_BG, node_rect, border_radius=5)
-            pygame.draw.rect(surface, border, node_rect, width=2, border_radius=5)
+            pygame.draw.rect(
+                surface, border, node_rect,
+                width=3 if role == "current" else 2, border_radius=5,
+            )
 
             text = "_" if val < 0 else str(val)
             val_surf = self._font.render(text, True, fg)
