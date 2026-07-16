@@ -6,6 +6,7 @@ from .linked_list import LinkedListAnimation
 from .doubly_linked_list import DoublyLinkedListAnimation
 from .deque import DequeAnimation
 from .stack import StackAnimation
+from .stack_linked_list import StackLinkedListAnimation
 from .queue import QueueAnimation
 from .hash_map import HashmapAnimation
 from .binary_tree import BinaryTreeAnimation
@@ -19,6 +20,7 @@ __all__ = [
     "DoublyLinkedListAnimation",
     "DequeAnimation",
     "StackAnimation",
+    "StackLinkedListAnimation",
     "QueueAnimation",
     "HashmapAnimation",
     "BinaryTreeAnimation",
