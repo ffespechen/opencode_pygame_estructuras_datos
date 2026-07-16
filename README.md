@@ -55,6 +55,7 @@ python -m ds_visualizer.main
 | **Stack / Pila** | Push (apilar), Peek (consultar tope), Pop (desapilar), Push — tope arriba |
 | **Stack (lista enlazada)** | Push en HEAD, Peek TOP=HEAD, Pop HEAD, Push |
 | **Queue / Cola** | Enqueue (encolar), Peek (consultar frente), Dequeue (desencolar), Enqueue |
+| **Queue (lista enlazada)** | Enqueue en TAIL, Peek FRONT=HEAD, Dequeue HEAD, Enqueue |
 | **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |
 | **Binary Tree** | Recorridos preorden, inorden, postorden e inserción en BST |
 | **Heap / Montículo** | Inserción con bubble-up, extracción con bubble-down, Peek (mínimo), Heapify |

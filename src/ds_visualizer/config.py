@@ -45,6 +45,7 @@ DS_OPTIONS = [
     ("Stack o Pila", "stack"),
     ("Stack (lista enlazada)", "stack_linked_list"),
     ("Queue o Cola", "queue"),
+    ("Queue (lista enlazada)", "queue_linked_list"),
     ("Hash Maps o Diccionarios", "hash_map"),
     ("Binary Tree", "binary_tree"),
     ("Heap", "heap"),
