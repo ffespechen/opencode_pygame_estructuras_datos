@@ -58,6 +58,7 @@ python -m ds_visualizer.main
 | **Queue (lista enlazada)** | Enqueue en TAIL, Peek FRONT=HEAD, Dequeue HEAD, Enqueue |
 | **Trie** | Insertar CAT, insertar CAR (prefijo), buscar prefijo CA, eliminar CAT |
 | **AVL Tree** | Insertar con desbalance LL, rotación derecha, desbalance RR, rotación izquierda |
+| **Union-Find** | Find raíz, Union de conjuntos, Union adicional, path compression |
 | **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |
 | **Binary Tree** | Recorridos preorden, inorden, postorden e inserción en BST |
 | **Heap / Montículo** | Inserción con bubble-up, extracción con bubble-down, Peek (mínimo), Heapify |

@@ -48,6 +48,7 @@ DS_OPTIONS = [
     ("Queue (lista enlazada)", "queue_linked_list"),
     ("Trie", "trie"),
     ("AVL Tree", "avl"),
+    ("Union-Find", "union_find"),
     ("Hash Maps o Diccionarios", "hash_map"),
     ("Binary Tree", "binary_tree"),
     ("Heap", "heap"),

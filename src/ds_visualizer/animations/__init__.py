@@ -11,6 +11,7 @@ from .queue import QueueAnimation
 from .queue_linked_list import QueueLinkedListAnimation
 from .trie import TrieAnimation
 from .avl import AvlAnimation
+from .union_find import UnionFindAnimation
 from .hash_map import HashmapAnimation
 from .binary_tree import BinaryTreeAnimation
 from .heap import HeapAnimation
@@ -28,6 +29,7 @@ __all__ = [
     "QueueLinkedListAnimation",
     "TrieAnimation",
     "AvlAnimation",
+    "UnionFindAnimation",
     "HashmapAnimation",
     "BinaryTreeAnimation",
     "HeapAnimation",
