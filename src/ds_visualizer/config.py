@@ -30,21 +30,39 @@ FONT_SIZE_MENU = 22
 
 SHORTCUT_FONT_SIZE = 15
 
-SHORTCUT_BAR_HEIGHT = 46
+SHORTCUT_BAR_HEIGHT = 52
+OP_TOOLBAR_HEIGHT = 44  # botones de operaciones (etapa 2)
 LEFT_PANEL_RATIO = 0.5
 INFO_PANEL_PADDING = 18
 ANIMATION_PANEL_PADDING = 10
+SELECTED_COLOR = (80, 220, 180)
+COMPLEXITY_COLOR = (255, 180, 100)
+# Roles en recorridos / búsquedas (stepper)
+VISITED_COLOR = (100, 200, 255)      # ya visitado
+CURRENT_COLOR = (255, 200, 50)       # nodo/celda actual
+FRONTIER_COLOR = (80, 220, 180)      # frontera (cola BFS / vecinos)
+PATH_EDGE_COLOR = (255, 170, 80)     # arista del camino / descubrimiento
 
 DATA_DIR = Path(__file__).parent / "data"
 
 DS_OPTIONS = [
     ("Array o Lista", "array"),
     ("Linked List", "linked_list"),
+    ("Doubly Linked List", "doubly_linked_list"),
     ("Stack o Pila", "stack"),
+    ("Stack (lista enlazada)", "stack_linked_list"),
     ("Queue o Cola", "queue"),
+    ("Queue (lista enlazada)", "queue_linked_list"),
+    ("Deque", "deque"),
+    ("Priority Queue", "priority_queue"),
     ("Hash Maps o Diccionarios", "hash_map"),
+    ("Hash Set", "hash_set"),
     ("Binary Tree", "binary_tree"),
+    ("AVL Tree", "avl"),
     ("Heap", "heap"),
+    ("Trie", "trie"),
     ("Grafo", "graph"),
+    ("Union-Find", "union_find"),
+    ("Sparse Matrix", "sparse_matrix"),
     ("Salir", "__quit__"),
 ]

@@ -2,7 +2,13 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    HitTarget,
+    Operation,
+)
 
 
 class HeapAnimation(BaseAnimation):
@@ -11,13 +17,124 @@ class HeapAnimation(BaseAnimation):
 
     def __init__(self) -> None:
         super().__init__()
-        self.heap = [8, 15, 12, 30, 20, 25, 18]
+        self._initial_heap = [8, 15, 12, 30, 20, 25, 18]
+        self.heap = list(self._initial_heap)
+        self._highlight_indices: set[int] = set()
         self.actions = [
             ("Inserción de 5: bubble-up", 5.0),
             ("Extracción del mínimo: bubble-down", 5.0),
             ("Peek: consulta del mínimo", 5.0),
             ("Heapify: convertir array en heap", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Insert", "insert",
+                prompt="Valor:", example="5",
+                complexity="O(log n)",
+            ),
+            Operation(
+                pygame.K_2, "Extract-min", "extract",
+                complexity="O(log n)",
+            ),
+            Operation(
+                pygame.K_3, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "heap_min_1",
+                "Mínimo = 1",
+                "Insertá valores hasta que el mínimo del heap sea 1.",
+                "Insert → 1 (bubble-up lo sube a la raíz).",
+                lambda a: bool(a.heap) and a.heap[0] == 1,
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.heap = list(self._initial_heap)
+        self._highlight_indices = set()
+
+    def _bubble_up(self, heap: list[int], idx: int) -> set[int]:
+        path = {idx}
+        while idx > 0:
+            parent = (idx - 1) // 2
+            if heap[idx] < heap[parent]:
+                heap[idx], heap[parent] = heap[parent], heap[idx]
+                path.add(parent)
+                idx = parent
+            else:
+                break
+        return path
+
+    def _bubble_down(self, heap: list[int], idx: int) -> set[int]:
+        path = {idx}
+        n = len(heap)
+        while True:
+            smallest = idx
+            left = 2 * idx + 1
+            right = 2 * idx + 2
+            if left < n and heap[left] < heap[smallest]:
+                smallest = left
+            if right < n and heap[right] < heap[smallest]:
+                smallest = right
+            if smallest == idx:
+                break
+            heap[idx], heap[smallest] = heap[smallest], heap[idx]
+            path.add(smallest)
+            idx = smallest
+        return path
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "insert":
+            val = self.parse_int(user_input or "")
+            if val is None:
+                return "Indicá un número entero"
+            self.heap.append(val)
+            self._highlight_indices = self._bubble_up(self.heap, len(self.heap) - 1)
+            return f"Insert {val} + bubble-up"
+        if op_id == "extract":
+            if not self.heap:
+                self._highlight_indices = set()
+                return "Heap vacío"
+            removed = self.heap[0]
+            last = self.heap.pop()
+            if self.heap:
+                self.heap[0] = last
+                self._highlight_indices = self._bubble_down(self.heap, 0)
+            else:
+                self._highlight_indices = set()
+            return f"Extract-min → {removed}"
+        if op_id == "peek":
+            if not self.heap:
+                self._highlight_indices = set()
+                return "Heap vacío"
+            self._highlight_indices = {0}
+            return f"Peek → mínimo = {self.heap[0]}"
+        return ""
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id in ("insert", "extract") and self._highlight_indices:
+            ordered = sorted(self._highlight_indices)
+            steps: list[AnimStep] = []
+            seen: list[int] = []
+            for i, idx in enumerate(ordered):
+                seen.append(idx)
+                val = self.heap[idx] if idx < len(self.heap) else "?"
+                steps.append(AnimStep(
+                    f"Bubble en índice {idx} (val={val})",
+                    highlight_set=frozenset(seen),
+                    current_idx=idx,
+                    note=f"{i + 1}/{len(ordered)} · Space=siguiente",
+                ))
+            return steps
+        return []
+
+    def on_drop(self, source_id: str, dest: HitTarget | None) -> str:
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -28,6 +145,10 @@ class HeapAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
 
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
+
         if self.action_index == 0:
             self._draw_insert(surface, rect)
         elif self.action_index == 1:
@@ -36,6 +157,32 @@ class HeapAnimation(BaseAnimation):
             self._draw_peek(surface, rect)
         elif self.action_index == 3:
             self._draw_heapify(surface, rect)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        n = len(self.heap)
+        if n == 0:
+            return
+        highlighted = set(self._highlight_indices)
+        current: int | None = None
+        if self.step_mode:
+            highlighted = set(self.highlight_set)
+            current = self.focus_idx if self.focus_idx >= 0 else None
+        elif self.live_op in ("insert", "extract"):
+            p = self.live_progress()
+            hl_list = sorted(highlighted)
+            count = max(1, int(p * len(hl_list))) if hl_list else 0
+            count = min(count, len(hl_list))
+            highlighted = set(hl_list[:count])
+            if count > 0:
+                current = hl_list[count - 1]
+        positions = self._compute_positions(rect, n)
+        self._draw_edges(surface, positions, n, highlighted, current)
+        self._draw_nodes(
+            surface, positions, self.heap, highlighted, current, register=True,
+        )
+        self._draw_array_bar(
+            surface, rect, self.heap, highlighted, current, register=True,
+        )
 
     def _compute_positions(self, rect: pygame.Rect,
                            n: int) -> dict[int, tuple[int, int]]:
@@ -64,46 +211,73 @@ class HeapAnimation(BaseAnimation):
                 positions[nid] = (x, y)
         return positions
 
-    def _draw_edges(self, surface: pygame.Surface,
-                    positions: dict[int, tuple[int, int]],
-                    n: int, highlighted: set[int]) -> None:
+    def _draw_edges(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        n: int, highlighted: set[int],
+        current: int | None = None,
+    ) -> None:
         for i in range(n):
             left = 2 * i + 1
             right = 2 * i + 2
-            if left < n and i in positions and left in positions:
-                color = (config.HIGHLIGHT_COLOR
-                         if i in highlighted or left in highlighted
-                         else config.DIVIDER_COLOR)
-                pygame.draw.line(surface, color, positions[i],
-                                 positions[left], width=2)
-            if right < n and i in positions and right in positions:
-                color = (config.HIGHLIGHT_COLOR
-                         if i in highlighted or right in highlighted
-                         else config.DIVIDER_COLOR)
-                pygame.draw.line(surface, color, positions[i],
-                                 positions[right], width=2)
+            for child in (left, right):
+                if child < n and i in positions and child in positions:
+                    if current is not None and (i == current or child == current):
+                        color = config.PATH_EDGE_COLOR
+                        width = 3
+                    elif i in highlighted and child in highlighted:
+                        color = config.VISITED_COLOR
+                        width = 2
+                    elif i in highlighted or child in highlighted:
+                        color = config.HIGHLIGHT_COLOR
+                        width = 2
+                    else:
+                        color = config.DIVIDER_COLOR
+                        width = 2
+                    pygame.draw.line(
+                        surface, color, positions[i], positions[child], width=width,
+                    )
 
-    def _draw_nodes(self, surface: pygame.Surface,
-                    positions: dict[int, tuple[int, int]],
-                    values: list[int], highlighted: set[int]) -> None:
+    def _draw_nodes(
+        self, surface: pygame.Surface,
+        positions: dict[int, tuple[int, int]],
+        values: list[int], highlighted: set[int],
+        current: int | None = None,
+        register: bool = False,
+    ) -> None:
         radius = 20
         for i, (x, y) in positions.items():
-            is_hl = i in highlighted
-            fg = config.HIGHLIGHT_COLOR if is_hl else config.TEXT_COLOR
-            border = fg
-            bg = config.CODE_BG
+            if current is not None and i == current:
+                role = "current"
+            elif i in highlighted:
+                role = "visited"
+            else:
+                role = "plain"
+            fg = self.color_for_role(role)
             val = values[i]
 
-            pygame.draw.circle(surface, bg, (x, y), radius)
-            pygame.draw.circle(surface, border, (x, y), radius, width=2)
+            pygame.draw.circle(surface, config.CODE_BG, (x, y), radius)
+            pygame.draw.circle(
+                surface, fg, (x, y), radius, width=3 if role == "current" else 2,
+            )
 
             val_surf = self._font.render(str(val), True, fg)
             vr = val_surf.get_rect(center=(x, y))
             surface.blit(val_surf, vr)
 
-    def _draw_array_bar(self, surface: pygame.Surface, rect: pygame.Rect,
-                        values: list[int],
-                        highlight_indices: set[int]) -> None:
+            if register:
+                hit = pygame.Rect(x - radius, y - radius, radius * 2, radius * 2)
+                self.register_hit(
+                    f"idx:{i}", hit, label=f"[{i}]={val}", index=i, value=val,
+                )
+
+    def _draw_array_bar(
+        self, surface: pygame.Surface, rect: pygame.Rect,
+        values: list[int],
+        highlight_indices: set[int],
+        current: int | None = None,
+        register: bool = False,
+    ) -> None:
         n = len(values)
         if n == 0:
             return
@@ -116,22 +290,31 @@ class HeapAnimation(BaseAnimation):
         for i, v in enumerate(values):
             bx = sx + i * (box_s + 6)
             br = pygame.Rect(int(bx), sy, box_s, box_s)
-            is_hl = i in highlight_indices
-            fg = config.HIGHLIGHT_COLOR if is_hl else config.TEXT_COLOR
-            border = fg
-            bg = config.CODE_BG
+            if current is not None and i == current:
+                role = "current"
+            elif i in highlight_indices:
+                role = "visited"
+            else:
+                role = "plain"
+            fg = self.color_for_role(role)
+            border = fg if role != "plain" else config.DIVIDER_COLOR
 
-            pygame.draw.rect(surface, bg, br, border_radius=3)
-            pygame.draw.rect(surface, border, br, width=1, border_radius=3)
+            pygame.draw.rect(surface, config.CODE_BG, br, border_radius=3)
+            pygame.draw.rect(
+                surface, border, br,
+                width=2 if role != "plain" else 1, border_radius=3,
+            )
             vs = small.render(str(v), True, fg)
             vr = vs.get_rect(center=br.center)
             surface.blit(vs, vr)
 
             idx_s = small.render(str(i), True, config.SUBTEXT_COLOR)
-            ir = idx_s.get_rect(
-                center=(br.centerx, sy - 12)
-            )
+            ir = idx_s.get_rect(center=(br.centerx, sy - 12))
             surface.blit(idx_s, ir)
+            if register:
+                self.register_hit(
+                    f"arr:{i}", br, label=f"[{i}]={v}", index=i, value=v,
+                )
 
     def _draw_insert(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
         p = self.progress()

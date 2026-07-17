@@ -2,6 +2,10 @@
 
 ## Decisiones de arquitectura y tomas de partido
 
+### 0. Producto hermano (WOZ.exe) en otra rama
+
+En `feature/aventura-woz-hal` el repo también incluye `src/aventura_woz/`: una aventura gráfica independiente que **deriva de la idea** de visualizar estructuras de datos, no del motor de este visualizador. No se registra en el menú de `ds_visualizer` ni reutiliza `BaseAnimation` / `MenuState`.
+
 ### 1. Estructura del proyecto — layout `src/`
 
 Se adoptó el layout `src/` (con `src/ds_visualizer/`) siguiendo las recomendaciones de la skill `python-project-structure`. Esto separa el código fuente del resto de artefactos (documentación, configuración) y evita importaciones accidentales del paquete sin instalarlo.
@@ -12,7 +16,7 @@ Se adoptó el layout `src/` (con `src/ds_visualizer/`) siguiendo las recomendaci
 
 La aplicación alterna entre dos modos mutuamente excluyentes:
 
-- **MenuState**: pantalla inicial de selección (9 opciones: 8 estructuras + "Salir")
+- **MenuState**: pantalla inicial de selección (estructuras de datos + "Salir")
 - **VisualizationState**: pantalla dividida verticalmente con animación e información
 
 Cada estado implementa una interfaz implícita con los métodos `on_enter()`, `on_resize()`, `handle_events()`, `update(dt)`, `draw(screen, w, h)`. La clase `App` en `app.py` actúa como orquestador y decide cuándo transicionar basándose en banderas (`selected_ds`, `back_to_menu`). La opción "Salir" usa la clave especial `"__quit__"` que `App` detecta y provoca `running = False`.
@@ -55,10 +59,28 @@ Cada animación define una lista de tuplas `(nombre, duración)` donde `nombre` 
 - Facilita crear secuencias: la subclase solo consulta `self.progress()` y dibuja en función de ese valor
 - Añadir una nueva acción es agregar una tupla a `self.actions`
 
+### 6b. Modo interactivo (operaciones dinámicas)
+
+Además del ciclo demo, `BaseAnimation` soporta un **modo interactivo** opcional:
+
+- `Operation(key, label, op_id, prompt=..., example=..., complexity=..., uses_selection=...)` declara las operaciones
+- `I` alterna demo ↔ interactivo; `R` llama a `reset()`; `1`…`N` / toolbar inician la operación
+- Entrada: `TEXTINPUT` + `Backspace`/`Enter`/`Esc`; barra overlay (`draw_input_overlay`)
+- **Click / selección**: `register_hit` durante `draw`; anillo cyan; alimenta prompts (`uses_selection`)
+- **Stepper**: `build_steps()` → `Space`/`←`/`→`; progreso por paso en lugar de solo timer
+- **Undo**: `capture_state` / `restore_state` (attrs auto + overrides); tecla `U`
+- **Feedback**: badge de complejidad y detalle en overlays
+- **Toolbar** (`OpToolbar`): botones de ops + Undo/Reset/Reto/Hint
+- **Drag & drop**: `on_drop(source, dest)` (array swap, aristas en grafo)
+- **Retos**: `Challenge` + tecla `C` / `H`; validación tras cada op
+
+**Motivación**: pasar de “ver la demo” a manipular la estructura como instrumento didáctico, con control fino (stepper) y refuerzo (retos), sin acoplar el visualizador al juego WOZ.
+
 ### 7. Redimensionamiento adaptativo
 
 - `App._handle_resize()` impone un tamaño mínimo de 800×600
-- En `VisualizationState`, el layout vertical usa proporción fija: panel superior (animación) = 45%, panel inferior (texto) = 55% del alto de contenido
+- En `VisualizationState`, el layout vertical usa proporción fija: panel superior (animación) = 45%, panel inferior (texto) = 55% del alto de contenido (descontando toolbar + barra de atajos)
+- Debajo del panel de info: `OpToolbar` (botones) + `ShortcutsBar`
 - `InfoPanel.load_markdown()` recibe el ancho y alto visibles y re-renderiza el contenido a ancho completo (`width - 2 * padding`)
 - Las animaciones reciben un `pygame.Rect` y dibujan relativo a él (sin coordenadas absolutas)
 
@@ -117,7 +139,7 @@ El cierre de la aplicación se captura de tres formas en `App.handle_events()`:
 
 ### 12. Opción Salir en el menú
 
-La novena opción del menú (`"Salir"`, clave `"__quit__"`) permite cerrar la aplicación desde el propio menú sin usar `Ctrl+Q`. Se distingue visualmente:
+La última opción del menú (`"Salir"`, clave `"__quit__"`) permite cerrar la aplicación desde el propio menú sin usar `Ctrl+Q`. Se distingue visualmente:
 - Línea divisoria horizontal encima separándola de las estructuras de datos
 - Color atenuado (`SUBTEXT_COLOR`) cuando no está seleccionada
 - Mismo resaltado azul que las demás opciones al estar seleccionada

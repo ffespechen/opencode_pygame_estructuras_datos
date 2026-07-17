@@ -2,7 +2,13 @@
 
 import pygame
 from ds_visualizer import config
-from ds_visualizer.animations.base import BaseAnimation
+from ds_visualizer.animations.base import (
+    AnimStep,
+    BaseAnimation,
+    Challenge,
+    HitTarget,
+    Operation,
+)
 
 
 class StackAnimation(BaseAnimation):
@@ -11,12 +17,91 @@ class StackAnimation(BaseAnimation):
     def __init__(self) -> None:
         super().__init__()
         self.base_values = [55, 23, 78, 41]
+        self._initial = list(self.base_values)
+        self.values = list(self._initial)
         self.actions = [
             ("Push: apilando elemento (99)", 5.0),
             ("Peek: consultando tope", 5.0),
             ("Pop: desapilando elemento", 5.0),
             ("Push: apilando elemento (33)", 5.0),
         ]
+        self.set_operations([
+            Operation(
+                pygame.K_1, "Push", "push",
+                prompt="Valor a apilar:", example="99",
+                complexity="O(1)",
+            ),
+            Operation(
+                pygame.K_2, "Peek", "peek",
+                complexity="O(1)", mutates=False,
+            ),
+            Operation(
+                pygame.K_3, "Pop", "pop",
+                complexity="O(1)",
+            ),
+        ])
+        self.set_challenges([
+            Challenge(
+                "stack_empty",
+                "Vaciar la pila",
+                "Hacé Pop hasta dejar la pila vacía.",
+                "Pop quita el TOPE (último en entrar).",
+                lambda a: len(a.values) == 0,
+            ),
+            Challenge(
+                "stack_top_1",
+                "Tope = 1",
+                "Dejá el valor 1 en el tope de la pila.",
+                "Push 1 (o Pop hasta poder Push 1 arriba).",
+                lambda a: bool(a.values) and a.values[-1] == 1,
+            ),
+        ])
+
+    def reset(self) -> None:
+        super().reset()
+        self.values = list(self._initial)
+
+    def apply_operation(self, op_id: str, user_input: str | None = None) -> str:
+        if op_id == "push":
+            v = self.parse_int(user_input or "")
+            if v is None:
+                return "Ingresá un número entero"
+            self.values.append(v)
+            self.highlight_idx = len(self.values) - 1
+            return f"Push {v}"
+        if op_id == "peek":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Pila vacía"
+            self.highlight_idx = len(self.values) - 1
+            return f"Peek → {self.values[-1]}"
+        if op_id == "pop":
+            if not self.values:
+                self.highlight_idx = -1
+                return "Pila vacía"
+            removed = self.values.pop()
+            self.highlight_idx = len(self.values) - 1 if self.values else -1
+            return f"Pop {removed}"
+        return ""
+
+    def build_steps(
+        self, op_id: str, user_input: str | None = None
+    ) -> list[AnimStep]:
+        if op_id == "peek" and self.values:
+            return [
+                AnimStep("Mirar TOPE (LIFO)", highlight_idx=len(self.values) - 1,
+                         note="O(1)"),
+            ]
+        if op_id == "pop" and self.highlight_idx >= -1:
+            # Tras pop, mostrar mensaje único
+            return [
+                AnimStep("Remover TOPE", note="O(1)"),
+            ]
+        return []
+
+    def on_drop(self, source_id: str, dest: HitTarget | None) -> str:
+        # Soltar sobre la pila desde un elemento = no-op pedagógico
+        return ""
 
     def update(self, dt: float) -> None:
         super().update(dt)
@@ -27,6 +112,10 @@ class StackAnimation(BaseAnimation):
 
         surface.fill(config.PANEL_BG)
 
+        if self.interactive:
+            self._draw_interactive(surface, rect)
+            return
+
         if self.action_index == 0:
             self._draw_push(surface, rect, 99)
         elif self.action_index == 1:
@@ -35,6 +124,21 @@ class StackAnimation(BaseAnimation):
             self._draw_pop(surface, rect)
         elif self.action_index == 3:
             self._draw_push(surface, rect, 33)
+
+    def _draw_interactive(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        if not self.values:
+            self.draw_empty(surface, rect, "(pila vacía)")
+            return
+        highlight_top = (
+            self.live_op == "peek"
+            or self.live_op == "push"
+            or self.live_op == "pop"
+            or self.highlight_idx == len(self.values) - 1
+        )
+        self._draw_stack(
+            surface, rect, self.values,
+            highlight_top=highlight_top, register=True,
+        )
 
     def _stack_center_y(self, rect: pygame.Rect, n: int,
                         box_h: int = 38, gap: int = 4) -> float:
@@ -45,6 +149,8 @@ class StackAnimation(BaseAnimation):
         self, surface: pygame.Surface, rect: pygame.Rect,
         bx: float, by: float, box_w: int, box_h: int,
         val: int, highlight: bool, alpha: int = 255,
+        register_id: str | None = None, register_label: str = "",
+        register_index: int | None = None,
     ) -> None:
         box_rect = pygame.Rect(int(bx), int(by), box_w, box_h)
 
@@ -62,9 +168,18 @@ class StackAnimation(BaseAnimation):
         temp_surf.blit(val_surf, val_r)
         surface.blit(temp_surf, box_rect)
 
+        if register_id is not None and alpha > 200:
+            meta = {"value": val, "draggable": True}
+            if register_index is not None:
+                meta["index"] = register_index
+            self.register_hit(
+                register_id, box_rect, label=register_label or str(val), **meta
+            )
+
     def _draw_stack(
         self, surface: pygame.Surface, rect: pygame.Rect,
         values: list[int], highlight_top: bool = False,
+        register: bool = False,
     ) -> None:
         box_w, box_h = 100, 38
         gap = 4
@@ -76,8 +191,14 @@ class StackAnimation(BaseAnimation):
             val = values[n - 1 - i]
             by = start_y + i * (box_h + gap)
             is_top = i == 0
-            self._draw_box(surface, rect, cx, by, box_w, box_h,
-                           val, is_top and highlight_top)
+            idx = n - 1 - i
+            self._draw_box(
+                surface, rect, cx, by, box_w, box_h,
+                val, is_top and highlight_top,
+                register_id=f"idx:{idx}" if register else None,
+                register_label=f"[{idx}]={val}" + (" TOPE" if is_top else ""),
+                register_index=idx,
+            )
 
         if n > 0:
             lbl_surf = self._font.render("TOPE →", True, config.ACCENT_COLOR)

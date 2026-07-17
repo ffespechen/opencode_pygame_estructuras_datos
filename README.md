@@ -1,8 +1,10 @@
 # Visualizador de Estructuras de Datos
 
+> **Monorepo:** este producto es el origen del repo. En la rama `feature/aventura-woz-hal` vive un proyecto **hermano** (`src/aventura_woz/` — WOZ.exe), derivado de la misma idea pedagógica pero con app, UI y docs propias (no es un modo de este visualizador).
+
 ## Descripción del proyecto
 
-Aplicación interactiva desarrollada con **Pygame** que permite explorar visualmente ocho estructuras de datos fundamentales. El usuario selecciona una estructura desde un menú y accede a una pantalla dividida verticalmente: en la parte superior se muestra una representación gráfica animada de la estructura en acción, y debajo información teórica detallada (características, elementos, casos de uso y pseudocódigo) cargada desde archivos markdown editables.
+Aplicación interactiva desarrollada con **Pygame** que permite explorar visualmente estructuras de datos fundamentales. El usuario selecciona una estructura desde un menú y accede a una pantalla dividida verticalmente: en la parte superior se muestra una representación gráfica animada de la estructura en acción, y debajo información teórica detallada (características, elementos, casos de uso y pseudocódigo) cargada desde archivos markdown editables.
 
 ## Tecnologías / frameworks / librerías utilizadas
 
@@ -29,8 +31,9 @@ python -m ds_visualizer.main
 
 ### Menú principal
 
-- Lista de 9 opciones navegable con flechas ↑↓ y selección con Enter
-- 8 estructuras de datos más la opción "Salir" al final, separada por una línea divisoria
+- Lista de opciones navegable con flechas ↑↓ (y rueda del ratón) y selección con Enter
+- Menú con scroll automático cuando hay muchas estructuras
+- Estructuras de datos más la opción "Salir" al final, separada por una línea divisoria
 - La opción "Salir" aparece en color atenuado cuando no está seleccionada
 - Título y subtítulo centrados dinámicamente
 - Opción seleccionada resaltada con borde azul y fondo diferenciado
@@ -38,24 +41,42 @@ python -m ds_visualizer.main
 ### Pantalla de visualización (dividida verticalmente)
 
 - **Panel superior (45%)**: animación visual de la estructura de datos a ancho completo
-  - Cada estructura tiene 4 acciones que se alternan cíclicamente (5 segundos cada una)
+  - **Modo demo** (por defecto): cada estructura cicla acciones animadas (~5 s cada una)
+  - **Modo interactivo** (`I`): operaciones por teclado, toolbar, click y drag; el estado persiste hasta `R` (reset)
+  - Las operaciones que necesitan datos **piden entrada** (valor, clave, par de vértices, etc.): escribí y confirmá con `Enter` (cancelar con `Esc`)
+  - **Click** en nodos/celdas para seleccionar (todas las estructuras)
+  - **Stepper** (`Space` / `←` `→`): recorre algoritmos paso a paso cuando aplica (traverse, search, BFS/DFS, etc.)
+  - **Undo** (`U`) y badge de **complejidad** tras cada operación
+  - **Toolbar** de botones (ops + Undo / Reset / Reto / Hint) sobre la barra de atajos
+  - **Drag & drop** donde aplica (p. ej. swap en array, aristas en grafo) y **retos** (`C`) con hint (`H`) en todas las estructuras
 - **Panel inferior (55%)**: información teórica de la estructura cargada desde archivos `.md` individuales
   - Renderiza títulos, encabezados, listas con viñetas, bloques de código con fondo y texto normal con ajuste de línea
   - Desplazamiento vertical con flechas ↑↓ o rueda del ratón
-- **Barra inferior**: atajos de teclado a la izquierda y acción actual de la animación a la derecha (amarillo)
+- **Barra inferior**: atajos a la izquierda; a la derecha, la acción demo, paso actual o feedback
+- **Toolbar de operaciones**: botones clickeables equivalentes a `1`…`N`
 
 ### Estructuras de datos implementadas
 
-| Estructura | Acciones animadas |
-|---|---|
-| **Array / Lista** | Recorrido por índice, búsqueda lineal, inserción, eliminación |
-| **Linked List** | Recorrido de nodos, inserción al inicio, inserción al final, eliminación |
-| **Stack / Pila** | Push (apilar), Peek (consultar tope), Pop (desapilar), Push — tope arriba |
-| **Queue / Cola** | Enqueue (encolar), Peek (consultar frente), Dequeue (desencolar), Enqueue |
-| **Hash Map / Diccionario** | Inserción con colisión, búsqueda por clave, inserción en nuevo bucket, eliminación |
-| **Binary Tree** | Recorridos preorden, inorden, postorden e inserción en BST |
-| **Heap / Montículo** | Inserción con bubble-up, extracción con bubble-down, Peek (mínimo), Heapify |
-| **Grafo** | BFS (anchura), DFS (profundidad), agregar vértice, agregar arista |
+| Estructura | Demo (automático) | Operaciones interactivas (`1`…`N`) |
+|---|---|---|
+| **Array / Lista** | Recorrido, búsqueda, inserción, eliminación | Traverse, Search, Insert, Delete |
+| **Linked List** | Recorrido, insert head/tail, delete | Traverse, Insert head, Insert tail, Delete head |
+| **Doubly Linked List** | Adelante, atrás, insert medio, delete | Forward, Backward, Insert mid, Delete |
+| **Stack / Pila** | Push, Peek, Pop | Push, Peek, Pop |
+| **Stack (lista enlazada)** | Push/Peek/Pop en HEAD | Push, Peek, Pop |
+| **Queue / Cola** | Enqueue, Peek, Dequeue | Enqueue, Peek, Dequeue |
+| **Queue (lista enlazada)** | Enqueue TAIL / Dequeue HEAD | Enqueue, Peek, Dequeue |
+| **Deque** | Push/Pop en ambos extremos | Push front, Push rear, Pop front, Pop rear |
+| **Priority Queue** | Enqueue por prio, Peek, Dequeue | Enqueue, Peek, Dequeue |
+| **Hash Map** | Put con colisión, Get, Delete | Put, Get, Remove |
+| **Hash Set** | Add, Contains, Remove, Intersección | Add, Contains, Remove |
+| **Binary Tree** | Preorden, inorden, postorden, insert BST | Preorden, Inorden, Postorden, Insert |
+| **AVL Tree** | Desbalance LL/RR y rotaciones | Insert, Delete |
+| **Heap** | Insert bubble-up, extract, Peek, Heapify | Insert, Extract-min, Peek |
+| **Trie** | Insert CAT/CAR, prefijo, delete | Insert, Search, Delete |
+| **Grafo** | BFS, DFS, vértice, arista | BFS, DFS, Add vertex, Add edge |
+| **Union-Find** | Find, Union, path compression | Find, Union |
+| **Sparse Matrix** | Vista COO, insert, search, traverse | Insert, Search, Traverse |
 
 ### Redimensionamiento de ventana
 
@@ -70,8 +91,19 @@ python -m ds_visualizer.main
 |---|---|
 | `Ctrl+Q` | Salir de la aplicación (desde cualquier pantalla) |
 | `↑ ↓` | Navegar opciones del menú / desplazar panel de información |
-| `Enter` | Seleccionar estructura en el menú |
-| `ESC` | Volver al menú desde la visualización |
+| `Enter` | Seleccionar estructura en el menú / confirmar prompt / fin stepper |
+| `ESC` | Cancelar prompt/stepper; si no, volver al menú |
+| `I` | Alternar modo demo ↔ interactivo (en visualización) |
+| `R` | Reiniciar la estructura al estado inicial |
+| `U` | Deshacer última operación mutante |
+| `C` | Iniciar / rotar reto (`Shift+C` cancela) |
+| `H` | Hint del reto activo |
+| `Space` / `→` | Siguiente paso del stepper |
+| `←` / `,` | Paso anterior del stepper |
+| `1`…`9` | Ejecutar la operación correspondiente (también activa el modo interactivo) |
+| Click | Seleccionar nodo/celda; botones de la toolbar |
+| Drag | Soltar sobre otro elemento (swap en array; arista en grafo) |
+| Texto + `Enter` | Completar el dato pedido por la operación |
 | `Rueda ratón` | Desplazar panel de información |
 
 ### Archivos de datos
